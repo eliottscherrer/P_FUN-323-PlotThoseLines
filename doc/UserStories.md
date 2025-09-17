@@ -1,36 +1,156 @@
-# User Stories
+# 📂 Users Stories – P_FUN-323-PlotThoseLines
 
-### US1 : En tant qu’utilisateur, je veux importer des données de cryptomonnaies depuis une API pour les afficher dans PTL.
+## [#1 – \[EPIC\] Ingestion des données et API](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/1)
 
-- Critères d’acceptation :
-  - PTL se connecte à une API publique (TokenInsight).
-  - L’utilisateur peut sélectionner une ou plusieurs cryptomonnaies (BTC, ETH, etc.).
-  - Les données sont importées au format JSON.
+### [#2 – Lister les marchés crypto](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/2)
 
-### US2 : En tant qu’utilisateur, je veux afficher un graphique comparant plusieurs cryptomonnaies sur une période donnée.
+📝 **En tant que** développeur
+**Je souhaite** appeler l’API TokenInsight pour récupérer la liste des cryptos disponibles et normaliser la réponse en modèle `MarketInfo`.
+**Pour** disposer d’une source de données que l’UI peut afficher.
 
-- Critères d’acceptation :
-  - L’utilisateur peut choisir une plage de dates (ex: 1 mois, 1 an, personnalisé).
-  - Le graphique affiche les prix des cryptos sélectionnées sur un axe temporel commun.
-  - On peut zoomer/dézoomer et survoler les points pour voir les valeurs exactes.
+📌 **Tests d’acceptance**
 
-### US3 : En tant qu’utilisateur, je veux superposer des intervalles de temps pour une même crypto (ex: BTC en 2020 et 2021).
+- Le backend appelle `api/v1/coins/list`.
+- Transformation en `MarketInfo` (id, symbole, nom, prix, volume 24h…).
+- Gestion d’erreurs avec feedback clair.
+- Exécution < 2s, tri par symbole alphabétique.
 
-- Critères d’acceptation :
-  - PTL permet de charger plusieurs jeux de données pour une même crypto (deux appels API).
-  - Les données sont affichées en continu sur le graphique, avec une distinction visuelle (couleur, style de ligne).
+---
 
-### US4 : En tant qu’utilisateur, je veux afficher des fonctions mathématiques en plus des séries temporelles.
+### [#3 – Récupération des données historiques](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/3)
 
-- Critères d’acceptation :
-  - Onglet ou mode dédié pour entrer une fonction (ex: `sin(x)`, `x^2`).
-  - La fonction est tracée sur le graphique, avec possibilité de superposition avec les données de crypto.
-  - Utilisation de Roslyn pour évaluer dynamiquement les expressions C#.
+📝 **En tant que** utilisateur
+**Je souhaite** récupérer des séries temporelles historiques depuis TokenInsight.
+**Pour** alimenter les graphiques avec de vraies données.
 
-## Planification
+📌 **Tests d’acceptance**
 
-1. Semaine 1-2 : Recherche d’API, setup du projet GitHub, création des maquettes.
-2. Semaine 3-4 : Développement de l’import des données (US1) et affichage basique (US2).
-3. Semaine 5-6 : Ajout des fonctionnalités de personnalisation (US4) et superposition (US3).
-4. Semaine 7-8 : Intégration des fonctions mathématiques (US5) et export (US6).
-5. Semaine 9 : Tests, documentation, et préparation de la release.
+- Appel `/api/v1/history/coins/{id}`, transformation en `TimeSeriesPoint`.
+- Gestion des erreurs (logs + UI informée).
+- Séries récupérées < 2s, triées par timestamp.
+
+---
+
+## [#9 – \[EPIC\] Importation des données](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/9)
+
+### [#8 – Importation de données JSON local](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/8)
+
+📝 **En tant que** utilisateur
+**Je souhaite** importer un asset local depuis un fichier JSON.
+**Afin de** visualiser mes propres données dans l’application.
+
+📌 **Tests d’acceptance**
+
+- Fichier JSON valide → asset importé avec nom, symbole et logo.
+- L’asset apparaît dans ma liste locale.
+
+---
+
+### [#13 – Importation des données API](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/13)
+
+📝 **En tant que** utilisateur
+**Je souhaite** importer un asset via API en le recherchant par nom.
+**Afin de** accéder à des données crypto à jour automatiquement.
+
+📌 **Tests d’acceptance**
+
+- Je recherche un asset (ex. Ethereum) puis clique _Add new asset_.
+- L’asset apparaît dans ma liste API avec ses données.
+
+---
+
+### [#14 – Expérience utilisateur lors de l'importation d'assets](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/14)
+
+📝 **En tant que** utilisateur
+**Je souhaite** être guidé par l’interface lors de l’importation (états vides, erreurs, confirmation).
+**Afin de** éviter les erreurs et savoir si l’ajout a réussi.
+
+📌 **Tests d’acceptance**
+
+- Formulaire incomplet, fichier invalide ou doublon → message clair affiché.
+- Succès ou échec mis à jour dans la liste.
+
+---
+
+### [#15 – Clarté de la page d'Assets](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/15)
+
+📝 **En tant que** utilisateur
+**Je souhaite** que l’UI sépare clairement assets locaux et API.
+**Afin de** gérer mes imports sans confusion.
+
+📌 **Tests d’acceptance**
+
+- Présentation claire : distinction visuelle avec noms, symboles, icônes.
+
+---
+
+## [#4 – \[EPIC\] Visualisation & Interaction](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/4)
+
+### [#5 – Affichage multi-séries temporelles](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/5)
+
+📝 **En tant que** analyste
+**Je souhaite** afficher plusieurs séries temporelles superposées.
+**Pour** comparer prix, volume, indicateurs facilement.
+
+📌 **Tests d’acceptance**
+
+- Affichage simultané d’au moins 2 séries (couleurs distinctes, axe Y flexible).
+- Tooltips précis.
+- Séries alignées sur le temps même avec données manquantes.
+
+---
+
+### [#6 – Sélectionner des intervalles](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/6)
+
+📝 **En tant que** utilisateur
+**Je souhaite** sélectionner des intervalles prédéfinis (1d, 1w, 1m, 1y, All).
+**Pour** explorer les données à différentes échelles.
+
+📌 **Tests d’acceptance**
+
+- Boutons visibles pour chaque intervalle.
+- Graphiques mis à jour automatiquement.
+- Données alignées correctement.
+- Intervalle sélectionné mis en évidence.
+
+---
+
+### [#7 – Superposer des périodes différentes](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/7)
+
+📝 **En tant que** analyste
+**Je souhaite** comparer des séries couvrant différentes périodes (ex. 2020 vs 2021).
+**Pour** analyser saisonnalités et comportements périodiques.
+
+📌 **Tests d’acceptance**
+
+- Séries superposées distinctement (style, couleur, légende).
+- Alignement temporel normalisé.
+- Tooltips indiquant date et valeur.
+
+---
+
+## [#10 – \[Task\] Maquettes Figma](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/10)
+
+📝 **En tant que** développeur
+**Je souhaite** concevoir et utiliser des maquettes Figma de l’application.
+**Pour** avoir une vision claire et validée avant de coder.
+
+📌 **Tests d’acceptance**
+
+- Écrans _Importation de données_, _Graphiques_ et _Paramètres_ créés dans Figma.
+- Navigation visible et cohérente.
+- Composants identifiés.
+- Alignement avec les User Stories.
+
+---
+
+## [#16 – Page Settings](https://github.com/eliottscherrer/P_FUN-323-PlotThoseLines/issues/16)
+
+📝 **En tant que** utilisateur
+**Je souhaite** renseigner et gérer ma clé API dans _Settings_.
+**Afin de** connecter l’application à mes sources externes.
+
+📌 **Tests d’acceptance**
+
+- Champ API visible dans _Settings_.
+- Clé API sauvegardée et utilisée pour récupérer mes données.
