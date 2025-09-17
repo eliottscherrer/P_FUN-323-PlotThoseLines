@@ -16,6 +16,12 @@ namespace PlotThoseLines
 
             builder.Services.AddMauiBlazorWebView();
 
+            builder.Services.AddScoped(sp => new HttpClient
+            {
+                BaseAddress = new Uri("https://api.tokeninsight.com/api/v1/"),
+                DefaultRequestHeaders = { { "TI_API_KEY", Environment.GetEnvironmentVariable("TI_API_KEY") ?? "" } }
+            });
+
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
