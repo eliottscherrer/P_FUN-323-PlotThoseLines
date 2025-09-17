@@ -6,6 +6,9 @@ namespace PlotThoseLines
     {
         public static MauiApp CreateMauiApp()
         {
+            // Load environment variables from .env file (located in the build directory)
+            DotNetEnv.Env.Load();
+
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
@@ -16,10 +19,12 @@ namespace PlotThoseLines
 
             builder.Services.AddMauiBlazorWebView();
 
+            string apiKey = Environment.GetEnvironmentVariable("TI_API_KEY") ?? "";
+
             builder.Services.AddScoped(sp => new HttpClient
             {
                 BaseAddress = new Uri("https://api.tokeninsight.com/api/v1/"),
-                DefaultRequestHeaders = { { "TI_API_KEY", Environment.GetEnvironmentVariable("TI_API_KEY") ?? "" } }
+                DefaultRequestHeaders = { { "TI_API_KEY", apiKey } }
             });
 
 #if DEBUG
