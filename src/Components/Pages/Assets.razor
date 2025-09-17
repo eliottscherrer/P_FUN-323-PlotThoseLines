@@ -1,16 +1,131 @@
-﻿@page "/assets"
+﻿@using Microsoft.AspNetCore.WebUtilities;
+@inject HttpClient Http
+@page "/assets"
 
-<h1>Assets</h1>
+<h1>Asset List</h1>
 
-<p role="status">Current count: @currentCount</p>
+<button class="btn btn-primary" @onclick="FetchData">
+    @if (isLoading)
+    {
+        <span>Loading...</span>
+    }
+    else
+    {
+        <span>FetchData Coin List</span>
+    }
+</button>
 
-<button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Logo</th>
+            <th>Name</th>
+            <th>Symbol</th>
+            <th>Price</th>
+        </tr>
+    </thead>
+    @if(coinList != null)
+    {
+        <tbody>
+            @foreach (var entry in coinList.items.Take(10))
+            {
+                <tr>
+                    <td><img src="@entry.logo" alt="logo" width="40" /></td>
+                    <td>@entry.name</td>
+                    <td>@entry.symbol.ToUpper()</td>
+                    <td>@entry.price.ToString("C2")</td>
+                </tr>
+            }
+        </tbody>
+    }
+</table>
+
+@if (errorMessage != null)
+{
+    <p style="color:red">@errorMessage</p>
+}
 
 @code {
-    private int currentCount = 0;
+    private CoinListResponse? coinList;
+    private bool isLoading = false;
+    private string? errorMessage;
 
-    private void IncrementCount()
+    private async Task FetchData()
     {
-        currentCount++;
+        isLoading = true;
+        errorMessage = null;
+        coinList = null;
+
+        try
+        {
+            var queryParams = new Dictionary<string, string?>
+            {
+                { "limit", "10" },
+                { "offset", "0" },
+                { "vs_currency", "usd" }
+            };
+            var url = QueryHelpers.AddQueryString($"coins/list", queryParams);
+            var response = await Http.GetFromJsonAsync<ApiResponse>(url);
+
+            if (response?.status?.code != 0)
+                errorMessage = $"{response?.status?.timestamp} - Error {response?.status?.code}: {response?.status?.message}";
+
+            if (response?.data != null)
+            {
+                coinList = response.data;
+
+                // Sort it alphabetically
+                if (coinList.items != null)
+                {
+                    coinList.items = coinList.items.OrderBy(i => i.name).ToList();
+                }
+            }
+            else
+                errorMessage = "No data found.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public class ApiResponse
+    {
+        public CoinListResponse? data { get; set; }
+        public Status? status { get; set; }
+    }
+
+    public class CoinListResponse
+    {
+        public List<CoinInfo>? items { get; set; }
+        public PageInfo? page_info { get; set; }
+    }
+
+    public class CoinInfo
+    {
+        public string? id { get; set; }
+        public string? logo { get; set; }
+        public string? name { get; set; }
+        public double price { get; set; }
+        public double price_change_percentage_24h { get; set; }
+        public double spot_volume_24h { get; set; }
+        public string? symbol { get; set; }
+        public string? url { get; set; }
+    }
+
+    public class PageInfo
+    {
+        public int total_results { get; set; }
+    }
+
+    public class Status
+    {
+        public int code { get; set; }
+        public string? message { get; set; }
+        public long timestamp { get; set; }
     }
 }
