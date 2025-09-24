@@ -1,131 +1,116 @@
 ﻿@using Microsoft.AspNetCore.WebUtilities;
 @inject HttpClient Http
+@inject LocalAssetService LocalAssetService
 @page "/assets"
 
-<h1>Asset List</h1>
+<h1>Assets</h1>
 
-<button class="btn btn-primary" @onclick="FetchData">
-    @if (isLoading)
+<div class="d-flex flex-column gap-3">
+    @if (localAssets != null && localAssets.Any())
     {
-        <span>Loading...</span>
+        @foreach (var asset in localAssets)
+        {
+            <div class="border rounded p-3 bg-white d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <img src="@asset.Logo" alt="@asset.Name logo" width="40" height="40" class="me-3" />
+                    <div>
+                        <h6 class="mb-1">@asset.Name</h6>
+                        <small class="text-muted">@asset.Symbol?.ToUpper()</small>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <div class="text-end me-3">
+                        <div class="fw-bold">@asset.Price.ToString("C2")</div>
+                        <small class="text-muted">Added: @asset.DateAdded.ToString("MMM dd, yyyy")</small>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm" 
+                            @onclick="() => RemoveAsset(asset.Id)" 
+                            title="Remove asset">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        }
     }
-    else
+    
+    <div class="border rounded p-3 bg-light d-flex justify-content-center align-items-center" 
+         style="cursor: pointer; border-style: dashed !important;" 
+         @onclick="ShowAddAssetModal">
+        <div class="text-center">
+            <i class="bi bi-plus-circle me-2"></i>
+            Import new API asset
+        </div>
+    </div>
+    
+    @if (localAssets == null || !localAssets.Any())
     {
-        <span>FetchData Coin List</span>
+        <div class="text-center py-4">
+            <i class="bi bi-folder2-open" style="font-size: 3rem; color: #6c757d;"></i>
+            <h5 class="mt-3 text-muted">No assets saved yet</h5>
+            <p class="text-muted">Click the button above to add your first cryptocurrency.</p>
+        </div>
     }
-</button>
+</div>
 
-<table class="table">
-    <thead>
-        <tr>
-            <th>Logo</th>
-            <th>Name</th>
-            <th>Symbol</th>
-            <th>Price</th>
-        </tr>
-    </thead>
-    @if(coinList != null)
-    {
-        <tbody>
-            @foreach (var entry in coinList.items.Take(10))
-            {
-                <tr>
-                    <td><img src="@entry.logo" alt="logo" width="40" /></td>
-                    <td>@entry.name</td>
-                    <td>@entry.symbol.ToUpper()</td>
-                    <td>@entry.price.ToString("C2")</td>
-                </tr>
-            }
-        </tbody>
-    }
-</table>
-
-@if (errorMessage != null)
-{
-    <p style="color:red">@errorMessage</p>
-}
+<AddAssetModal IsVisible="showAddAssetModal" 
+               OnClose="HideAddAssetModal" 
+               OnAssetAdded="OnAssetAdded" />
 
 @code {
-    private CoinListResponse? coinList;
+    private List<LocalAsset>? localAssets;
     private bool isLoading = false;
     private string? errorMessage;
+    private bool showAddAssetModal = false;
 
-    private async Task FetchData()
+    protected override async Task OnInitializedAsync()
     {
-        isLoading = true;
-        errorMessage = null;
-        coinList = null;
+        await LoadLocalAssets();
+    }
 
+    private async Task LoadLocalAssets()
+    {
         try
         {
-            var queryParams = new Dictionary<string, string?>
-            {
-                { "limit", "10" },
-                { "offset", "0" },
-                { "vs_currency", "usd" }
-            };
-            var url = QueryHelpers.AddQueryString($"coins/list", queryParams);
-            var response = await Http.GetFromJsonAsync<ApiResponse>(url);
-
-            if (response?.status?.code != 0)
-                errorMessage = $"{response?.status?.timestamp} - Error {response?.status?.code}: {response?.status?.message}";
-
-            if (response?.data != null)
-            {
-                coinList = response.data;
-
-                // Sort it alphabetically
-                if (coinList.items != null)
-                {
-                    coinList.items = coinList.items.OrderBy(i => i.name).ToList();
-                }
-            }
-            else
-                errorMessage = "No data found.";
+            localAssets = LocalAssetService.GetAssets();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error: {ex.Message}";
+            errorMessage = $"Error loading local assets: {ex.Message}";
         }
-        finally
+    }
+
+    private void ShowAddAssetModal()
+    {
+        showAddAssetModal = true;
+    }
+
+    private void HideAddAssetModal()
+    {
+        showAddAssetModal = false;
+    }
+
+    private async Task OnAssetAdded()
+    {
+        await LoadLocalAssets();
+        StateHasChanged();
+    }
+
+    private async Task RemoveAsset(string? assetId)
+    {
+        if (string.IsNullOrWhiteSpace(assetId)) return;
+
+        try
         {
-            isLoading = false;
+            var success = await LocalAssetService.RemoveAssetAsync(assetId);
+            if (success)
+            {
+                await LoadLocalAssets();
+                StateHasChanged();
+            }
         }
-    }
-
-    public class ApiResponse
-    {
-        public CoinListResponse? data { get; set; }
-        public Status? status { get; set; }
-    }
-
-    public class CoinListResponse
-    {
-        public List<CoinInfo>? items { get; set; }
-        public PageInfo? page_info { get; set; }
-    }
-
-    public class CoinInfo
-    {
-        public string? id { get; set; }
-        public string? logo { get; set; }
-        public string? name { get; set; }
-        public double price { get; set; }
-        public double price_change_percentage_24h { get; set; }
-        public double spot_volume_24h { get; set; }
-        public string? symbol { get; set; }
-        public string? url { get; set; }
-    }
-
-    public class PageInfo
-    {
-        public int total_results { get; set; }
-    }
-
-    public class Status
-    {
-        public int code { get; set; }
-        public string? message { get; set; }
-        public long timestamp { get; set; }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error removing asset: {ex.Message}";
+        }
     }
 }
