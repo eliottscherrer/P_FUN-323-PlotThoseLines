@@ -1,12 +1,26 @@
 ﻿@using Microsoft.AspNetCore.WebUtilities;
 @inject HttpClient Http
+@inject LocalAssetService LocalAssetService
 @page "/"
 
 <h1>Charts</h1>
 
 <div class="form-group row mb-3">
     <div class="col-md-3">
-        <label for="coinName">Coin ID:</label>
+        <label for="savedAssets">Saved Assets:</label>
+        <select id="savedAssets" class="form-control" @onchange="OnAssetSelected">
+            <option value="">-- Select a saved asset --</option>
+            @if (savedAssets != null)
+            {
+                @foreach (var asset in savedAssets)
+                {
+                    <option value="@asset.Id">@asset.Name (@asset.Symbol?.ToUpper())</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label for="coinName">Or enter Coin ID manually:</label>
         <input id="coinName" class="form-control" @bind="coinName" placeholder="e.g., bitcoin, ethereum" />
     </div>
     <div class="col-md-2">
@@ -27,10 +41,15 @@
             <option value="usd">USD</option>
         </select>
     </div>
-    <div class="col-md-3 d-flex align-items-end">
+</div>
+<div class="row mb-3">
+    <div class="col-md-12 d-flex justify-content-center">
         <button class="btn btn-primary" @onclick="FetchData">
             @if (isLoading)
             {
+                <span class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </span>
                 <span>Loading...</span>
             }
             else
@@ -116,12 +135,43 @@
     private CoinHistoryDataResponse? coinHistoryData;
     private bool isLoading = false;
     private string? errorMessage;
+    private List<LocalAsset>? savedAssets;
+    private string selectedAssetId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSavedAssets();
+    }
+
+    private async Task LoadSavedAssets()
+    {
+        try
+        {
+            savedAssets = LocalAssetService.GetAssets();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading saved assets: {ex.Message}");
+        }
+    }
+
+    private void OnAssetSelected(ChangeEventArgs e)
+    {
+        selectedAssetId = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(selectedAssetId))
+        {
+            coinName = selectedAssetId;
+        }
+    }
 
     private async Task FetchData()
     {
-        if (string.IsNullOrWhiteSpace(coinName))
+        // Use selected asset or manual input
+        var targetCoinId = !string.IsNullOrWhiteSpace(selectedAssetId) ? selectedAssetId : coinName;
+        
+        if (string.IsNullOrWhiteSpace(targetCoinId))
         {
-            errorMessage = "Please enter a valid coin ID";
+            errorMessage = "Please select a saved asset or enter a valid coin ID";
             return;
         }
 
@@ -137,7 +187,7 @@
                 { "length", dataLength.ToString() },
                 { "vs_currency", vsCurrency }
             };
-            var url = QueryHelpers.AddQueryString($"history/coins/{coinName}", queryParams);
+            var url = QueryHelpers.AddQueryString($"history/coins/{targetCoinId}", queryParams);
             var response = await Http.GetFromJsonAsync<ApiResponse>(url);
 
             if (response?.status?.code != 0)
