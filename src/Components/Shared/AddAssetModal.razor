@@ -1,0 +1,291 @@
+@using Microsoft.AspNetCore.WebUtilities
+@using PlotThoseLines.Services
+@inject HttpClient Http
+@inject LocalAssetService LocalAssetService
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop show" @onclick="Close"></div>
+    
+    <div class="modal show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import New Asset</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label for="searchInput">Search Cryptocurrency:</label>
+                        <input id="searchInput" type="text" class="form-control" 
+                               @bind="searchTerm" @oninput="OnSearchInput" 
+                               placeholder="Search for crypto (e.g., Bitcoin, Ethereum)..." />
+                    </div>
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+
+                    @if (searchResults != null && searchResults.Any())
+                    {
+                        <div class="search-results">
+                            <h6>Search Results:</h6>
+                            <div class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">
+                                @foreach (var coin in searchResults.Take(15))
+                                {
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <img src="@coin.logo" alt="@coin.name logo" width="32" height="32" class="me-2" />
+                                            <div>
+                                                <strong>@coin.name</strong> (@coin.symbol?.ToUpper())
+                                                <br />
+                                                <small class="text-muted">@coin.price.ToString("C2")</small>
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-success btn-sm" 
+                                                @onclick="() => AddAsset(coin)"
+                                                disabled="@(addingAssets.Contains(coin.id))">
+                                            @if (addingAssets.Contains(coin.id))
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status">
+                                                    <span class="visually-hidden">Adding...</span>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span>Add</span>
+                                            }
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @errorMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(successMessage))
+                    {
+                        <div class="alert alert-success" role="alert">
+                            @successMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnAssetAdded { get; set; }
+
+    private string searchTerm = "";
+    private bool isLoading = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private List<CoinInfo>? searchResults;
+    private List<CoinInfo>? defaultCryptos;
+    private HashSet<string?> addingAssets = new();
+    private List<CoinInfo>? allCoins;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SearchAssets();
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            searchResults = null;
+            return;
+        }
+
+        if (searchTerm.Length >= 2)
+        {
+            await SearchAssets();
+        }
+    }
+
+    private async Task SearchAssets()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            if (allCoins == null)
+            {
+                var queryParams = new Dictionary<string, string?>
+                {
+                    { "limit", "1500" },
+                    { "offset", "0" },
+                    { "vs_currency", "usd" }
+                };
+                var url = QueryHelpers.AddQueryString("coins/list", queryParams);
+                var response = await Http.GetFromJsonAsync<ApiResponse>(url);
+
+                if (response?.status?.code == 0 && response?.data?.items != null)
+                {
+                    allCoins = response.data.items;
+                }
+                else
+                {
+                    allCoins = new List<CoinInfo>();
+                }
+            }
+
+            var term = searchTerm?.Trim() ?? string.Empty;
+
+            IEnumerable<CoinInfo> filtered = allCoins;
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                filtered = allCoins.Where(i =>
+                    (i.name?.Contains(term, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (i.symbol?.Contains(term, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (i.id?.Contains(term, StringComparison.OrdinalIgnoreCase) == true));
+            }
+
+            searchResults = filtered
+                .OrderByDescending(i => i.price)
+                .Take(10)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error searching assets: {ex.Message}";
+            searchResults = new List<CoinInfo>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddAsset(CoinInfo coin)
+    {
+        if (coin.id == null) return;
+
+        addingAssets.Add(coin.id);
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var localAsset = new LocalAsset
+            {
+                Id = coin.id,
+                Name = coin.name,
+                Symbol = coin.symbol,
+                Logo = coin.logo,
+                Price = coin.price,
+                Url = coin.url
+            };
+
+            var success = await LocalAssetService.AddAssetAsync(localAsset);
+            
+            if (success)
+            {
+                successMessage = $"{coin.name} has been added to your assets!";
+                await OnAssetAdded.InvokeAsync();
+            }
+            else
+            {
+                errorMessage = $"{coin.name} is already in your asset list.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error adding asset: {ex.Message}";
+        }
+        finally
+        {
+            addingAssets.Remove(coin.id);
+        }
+    }
+
+    private async Task Close()
+    {
+        searchTerm = "";
+        searchResults = null;
+        errorMessage = null;
+        successMessage = null;
+        addingAssets.Clear();
+        allCoins = null;
+        await OnClose.InvokeAsync();
+    }
+
+    public class ApiResponse
+    {
+        public CoinListResponse? data { get; set; }
+        public Status? status { get; set; }
+    }
+
+    public class CoinListResponse
+    {
+        public List<CoinInfo>? items { get; set; }
+        public PageInfo? page_info { get; set; }
+    }
+
+    public class CoinInfo
+    {
+        public string? id { get; set; }
+        public string? logo { get; set; }
+        public string? name { get; set; }
+        public double price { get; set; }
+        public double price_change_percentage_24h { get; set; }
+        public double spot_volume_24h { get; set; }
+        public string? symbol { get; set; }
+        public string? url { get; set; }
+    }
+
+    public class PageInfo
+    {
+        public int total_results { get; set; }
+    }
+
+    public class Status
+    {
+        public int code { get; set; }
+        public string? message { get; set; }
+        public long timestamp { get; set; }
+    }
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+    }
+
+    .modal {
+        z-index: 1050;
+    }
+
+    .search-results, .default-cryptos {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+</style>
