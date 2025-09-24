@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using PlotThoseLines.Services;
 
 namespace PlotThoseLines
 {
@@ -26,6 +27,8 @@ namespace PlotThoseLines
                 BaseAddress = new Uri("https://api.tokeninsight.com/api/v1/"),
                 DefaultRequestHeaders = { { "TI_API_KEY", apiKey } }
             });
+
+            builder.Services.AddSingleton<LocalAssetService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();
