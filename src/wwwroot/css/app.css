@@ -164,3 +164,38 @@ h1:focus {
         margin: 1rem auto;
     }
 }
+
+.apx-tooltip-custom {
+    background: rgba(17, 24, 39, 0.93);
+    color: #f8fafc;
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+    min-width: 200px;
+}
+
+.apx-tooltip-custom .title {
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    opacity: 0.85;
+    margin-bottom: 6px;
+}
+
+.apx-tooltip-custom .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    padding: 2px 0;
+}
+
+.apx-tooltip-custom .row span:last-child {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+.card-header h5 { font-weight: 600; }
+.card { border-radius: 10px; }
+.card .card-body { background: #ffffff; }

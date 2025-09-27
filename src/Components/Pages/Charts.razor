@@ -68,18 +68,25 @@
         </div>
         <div class="card-body">
             <div class="row">
-                <div class="col-lg-9">
+                <div class="col-12">
                     <ApexChart TItem="EnhancedMarketChart"
                                Height="500"
                                Options="priceChartOptions"
                                @ref="chartRef">
 
                         <ApexPointSeries TItem="EnhancedMarketChart"
-                                         Name="Price"
+                                         Name="@PriceSeriesName"
                                          Items="GetEnhancedChartData()"
                                          SeriesType="SeriesType.Line"
                                          XValue="@(e => e.DateTime)"
-                                         YValue="@(e => (decimal)e.Price)" />
+                                         YValue="@(e => (decimal)Math.Round(e.Price, 2))" />
+
+                        <ApexPointSeries TItem="EnhancedMarketChart"
+                                         Name="@VolumeSeriesName"
+                                         Items="GetEnhancedChartData()"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.DateTime)"
+                                         YValue="@(e => (decimal)(e.Volume / volumeScale))" />
                     </ApexChart>
                 </div>
             </div>
@@ -121,6 +128,10 @@ else if (coinHistoryData?.market_chart != null)
     private string selectedAssetId = "";
     private ApexChart<EnhancedMarketChart>? chartRef;
     private EnhancedMarketChart? selectedDataPoint;
+    private double volumeScale = 1.0;
+    private string volumeSuffix = string.Empty;
+    private string VolumeSeriesName => string.IsNullOrEmpty(volumeSuffix) ? "Volume" : $"Volume ({volumeSuffix})";
+    private string PriceSeriesName => $"Price ({vsCurrency?.ToUpper()})";
 
     private ApexChartOptions<EnhancedMarketChart> priceChartOptions = new()
     {
@@ -128,25 +139,43 @@ else if (coinHistoryData?.market_chart != null)
         {
             Type = ChartType.Line,
             Zoom = new Zoom { Enabled = true },
-            Toolbar = new Toolbar { Show = true }
+            Toolbar = new Toolbar { Show = true },
+            ForeColor = "#334155"
         },
         Xaxis = new XAxis
         {
             Type = XAxisType.Datetime,
-            Title = new AxisTitle { Text = "Date/Time" }
+            Title = new AxisTitle { Text = "Date/Time" },
+            Labels = new XAxisLabels
+            {
+                DatetimeUTC = false,
+                DatetimeFormatter = new DatetimeFormatter
+                {
+                    Year = "yyyy",
+                    Month = "dd MMM",
+                    Day = "dd MMM",
+                    Hour = "HH:mm"
+                }
+            },
+            TickAmount = 6
         },
         Yaxis = new List<YAxis>
         {
             new YAxis
             {
                 Title = new AxisTitle { Text = "Price (USD)" },
-                Labels = new YAxisLabels
-                {
-                    Formatter = "function(value) { return '$' + value.toFixed(2); }"
-                }
+                Labels = new YAxisLabels()
+            },
+            new YAxis
+            {
+                Opposite = true,
+                Title = new AxisTitle { Text = "Volume" },
+                Labels = new YAxisLabels()
             }
         },
         Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 },
+        DataLabels = new DataLabels { Enabled = false },
+        Markers = new Markers { Size = 0 },
         Grid = new Grid
         {
             BorderColor = "#f1f1f1",
@@ -156,8 +185,21 @@ else if (coinHistoryData?.market_chart != null)
                 Colors = new List<string> { "#f8f8f8", "transparent" },
                 Opacity = 0.75
             }
-        }
+        },
+        PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar
+            {
+                Horizontal = false,
+                ColumnWidth = "60%",
+                BorderRadius = 2
+            }
+        },
+        Colors = new List<string> { "#2E93FA", "#A3E635" },
+        Legend = new Legend { Show = true, Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Shared = true, Intersect = false, X = new TooltipX { Format = "dd MMM yyyy HH:mm" } }
     };
+
 
     private List<EnhancedMarketChart> GetEnhancedChartData()
     {
@@ -167,7 +209,7 @@ else if (coinHistoryData?.market_chart != null)
         return coinHistoryData.market_chart.Select(entry => new EnhancedMarketChart
         {
             DateTime = DateTimeOffset.FromUnixTimeMilliseconds(entry.timestamp).DateTime,
-            Price = entry.price,
+            Price = Math.Round(entry.price, 2),
             MarketCap = entry.market_cap,
             Volume = entry.vol_spot_24h
         }).ToList();
@@ -231,6 +273,15 @@ else if (coinHistoryData?.market_chart != null)
             if (response?.data != null)
             {
                 coinHistoryData = response.data;
+                ComputeVolumeScale();
+                if (priceChartOptions?.Yaxis != null && priceChartOptions.Yaxis.Count > 1)
+                {
+                    priceChartOptions.Yaxis[1].Title = new AxisTitle { Text = VolumeSeriesName };
+                }
+                if (chartRef is not null)
+                {
+                    await chartRef.UpdateOptionsAsync(true, true, false, null);
+                }
             }
             else
                 errorMessage = "No data found.";
@@ -249,6 +300,20 @@ else if (coinHistoryData?.market_chart != null)
         {
             isLoading = false;
         }
+    }
+
+    private void ComputeVolumeScale()
+    {
+        double maxVol = coinHistoryData?.market_chart?.Max(m => m.vol_spot_24h) ?? 0;
+
+        (volumeScale, volumeSuffix) = maxVol switch
+        {
+            >= 1_000_000_000_000d => (1_000_000_000_000d, "T"),
+            >= 1_000_000_000d     => (1_000_000_000d, "B"),
+            >= 1_000_000d         => (1_000_000d, "M"),
+            >= 1_000d             => (1_000d, "K"),
+            _                     => (1.0, string.Empty)
+        };
     }
 
     public class ApiResponse
