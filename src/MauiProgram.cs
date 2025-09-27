@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using ApexCharts;
+using Microsoft.Extensions.Logging;
 using PlotThoseLines.Services;
 
 namespace PlotThoseLines
@@ -19,6 +20,9 @@ namespace PlotThoseLines
                 });
 
             builder.Services.AddMauiBlazorWebView();
+
+            // Charting library
+            builder.Services.AddApexChartsMaui();
 
             string apiKey = Environment.GetEnvironmentVariable("TI_API_KEY") ?? "";
 
