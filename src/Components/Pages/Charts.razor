@@ -208,7 +208,7 @@ else if (coinHistoryData?.market_chart != null)
 
         return coinHistoryData.market_chart.Select(entry => new EnhancedMarketChart
         {
-            DateTime = DateTimeOffset.FromUnixTimeMilliseconds(entry.timestamp).DateTime,
+            DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
             Price = Math.Round(entry.price, 2),
             MarketCap = entry.market_cap,
             Volume = entry.vol_spot_24h
