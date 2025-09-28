@@ -24,15 +24,24 @@ namespace PlotThoseLines
             // Charting library
             builder.Services.AddApexChartsMaui();
 
-            string apiKey = Environment.GetEnvironmentVariable("TI_API_KEY") ?? "";
-
-            builder.Services.AddScoped(sp => new HttpClient
-            {
-                BaseAddress = new Uri("https://api.tokeninsight.com/api/v1/"),
-                DefaultRequestHeaders = { { "TI_API_KEY", apiKey } }
-            });
-
+            // Services
             builder.Services.AddSingleton<LocalAssetService>();
+            builder.Services.AddSingleton<SettingsService>();
+
+            // HttpClient with API key header (from saved settings or environment var)
+            builder.Services.AddScoped(sp =>
+            {
+                var settings = sp.GetRequiredService<SettingsService>();
+                var apiKey = settings.GetApiKey();
+
+                var client = new HttpClient { BaseAddress = new Uri("https://api.tokeninsight.com/api/v1/") };
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                {
+                    client.DefaultRequestHeaders.Remove("TI_API_KEY");
+                    client.DefaultRequestHeaders.Add("TI_API_KEY", apiKey);
+                }
+                return client;
+            });
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();

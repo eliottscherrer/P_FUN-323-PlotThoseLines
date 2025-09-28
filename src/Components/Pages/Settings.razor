@@ -1,61 +1,70 @@
 ﻿@page "/settings"
+@inject PlotThoseLines.Services.SettingsService SettingsService
+@inject HttpClient Http
 
-<h1>Settings</h1>
-
-<p>This component demonstrates showing data.</p>
-
-@if (forecasts == null)
+<div class="settings-title">API Settings</div>
+<div class="input-row">
+    <div class="input-wrap">
+        <span class="left-icon"><i class="bi bi-key"></i></span>
+        <input class="settings-input" placeholder="Enter your TokenInsight API key" value="@apiKey" @oninput="OnApiKeyChanged" />
+    </div>
+    @if (saved)
+    {
+        <div class="saved-chip"><i class="bi bi-check"></i>Saved</div>
+    }
+</div>
+@if (!string.IsNullOrWhiteSpace(error))
 {
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Temp. (C)</th>
-                <th>Temp. (F)</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
-            {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="error">@error</div>
 }
 
 @code {
-    private WeatherForecast[]? forecasts;
+    private string? apiKey;
+    private bool saved;
+    private string? error;
+    private System.Timers.Timer? debounceTimer;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        // Simulate asynchronous loading to demonstrate a loading indicator
-        await Task.Delay(500);
-
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
-        {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
+        apiKey = SettingsService.GetApiKey();
+        SetupDebounce();
     }
 
-    private class WeatherForecast
+    private void SetupDebounce()
     {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+        debounceTimer = new System.Timers.Timer(500);
+        debounceTimer.AutoReset = false;
+        debounceTimer.Elapsed += async (_, __) => await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await SettingsService.SetApiKeyAsync(apiKey);
+            Http.DefaultRequestHeaders.Remove("TI_API_KEY");
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                Http.DefaultRequestHeaders.Add("TI_API_KEY", apiKey);
+            }
+            saved = true;
+            error = null;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(1200);
+            saved = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void OnApiKeyChanged(ChangeEventArgs e)
+    {
+        apiKey = e.Value?.ToString();
+        saved = false;
+        debounceTimer?.Stop();
+        debounceTimer?.Start();
     }
 }
