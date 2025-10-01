@@ -1,0 +1,43 @@
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 8px;
+  border: 1px solid var(--seg-border);
+  background-color: var(--seg-bg);
+}
+
+.segmented button {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+    Arial, sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--seg-text);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.segmented button.selected {
+  background-color: var(--seg-selected-bg);
+  border-color: var(--seg-selected-border);
+  color: var(--seg-selected-text);
+}
+
+.segmented button:not(.selected):hover {
+  background-color: rgba(71, 85, 105, 0.05);
+}
+
+.segmented button:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}

@@ -1,4 +1,5 @@
 ﻿@using Microsoft.AspNetCore.WebUtilities;
+@using Microsoft.AspNetCore.Components.Forms;
 @inject HttpClient Http
 @inject LocalAssetService LocalAssetService
 @page "/"
@@ -19,17 +20,40 @@
             }
         </select>
     </div>
-    <div class="col-md-2">
-        <label for="interval">Interval:</label>
-        <select id="interval" class="form-control" @bind="interval">
-            <option value="minute">Minute</option>
-            <option value="hour">Hour</option>
-            <option value="day">Day</option>
-        </select>
-    </div>
-    <div class="col-md-2">
-        <label for="dataLength">Data Length:</label>
-        <input id="dataLength" type="number" class="form-control" @bind="dataLength" min="1" />
+    <div class="col-md-9 d-flex align-items-end">
+        <div class="time-range-wrapper">
+            <div class="segmented" role="tablist" aria-label="Time range">
+                <button type="button"
+                    class='@GetSegmentClass("1d")'
+                    role="tab"
+                    aria-selected='@IsSelected("1d")'
+                    @onclick='() => SelectedRange = "1d"'>1d</button>
+
+                <button type="button"
+                    class='@GetSegmentClass("7d")'
+                    role="tab"
+                    aria-selected='@IsSelected("7d")'
+                    @onclick='() => SelectedRange = "7d"'>7d</button>
+
+                <button type="button"
+                    class='@GetSegmentClass("1m")'
+                    role="tab"
+                    aria-selected='@IsSelected("1m")'
+                    @onclick='() => SelectedRange = "1m"'>1m</button>
+
+                <button type="button"
+                    class='@GetSegmentClass("1y")'
+                    role="tab"
+                    aria-selected='@IsSelected("1y")'
+                    @onclick='() => SelectedRange = "1y"'>1y</button>
+
+                <button type="button"
+                    class='@GetSegmentClass("all")'
+                    role="tab"
+                    aria-selected='@IsSelected("all")'
+                    @onclick='() => SelectedRange = "all"'>All</button>
+            </div>
+        </div>
     </div>
 </div>
 <div class="row mb-3">
@@ -104,6 +128,18 @@ else if (coinHistoryData?.market_chart != null)
     private string selectedAssetId = "";
     private ApexChart<EnhancedMarketChart>? chartRef;
     private string PriceSeriesName => $"Price ({vsCurrency?.ToUpper()})";
+    private string selectedRange = "1m";
+    private string SelectedRange
+    {
+        get => selectedRange;
+        set
+        {
+            if (selectedRange == value) return;
+            selectedRange = value;
+            ApplyPresetRange(value);
+            StateHasChanged();
+        }
+    }
 
     private ApexChartOptions<EnhancedMarketChart> priceChartOptions = new()
     {
@@ -224,7 +260,47 @@ else if (coinHistoryData?.market_chart != null)
     protected override void OnInitialized()
     {
         LoadSavedAssets();
+        ApplyPresetRange(selectedRange);
     }
+
+    // From: https://tokeninsight-api.readme.io/reference/get_history-coins-id
+    // This para decides how many data points you will get in the response, and different lengths are supported for different intervals.
+    // For day, any number between 1 - 365, -1 stands for the max length, and 90 is the default if left blank.
+    // For hour, any number between 1 - 8784, 24 in the default if left blank.
+    // For minute, any number between 1 - 10080, 60 is the default if left blank.
+    private void ApplyPresetRange(string range)
+    {
+        switch (range)
+        {
+            case "1d":
+                interval = "hour";
+                dataLength = 24;
+                break;
+            case "7d":
+                interval = "day";
+                dataLength = 7;
+                break;
+            case "1m":
+                interval = "day";
+                dataLength = 30;
+                break;
+            case "1y":
+                interval = "day";
+                dataLength = 365;
+                break;
+            case "all":
+                interval = "day";
+                dataLength = -1;
+                break;
+            default:
+                interval = "day";
+                dataLength = 365;
+                break;
+        }
+    }
+
+    private bool IsSelected(string range) => SelectedRange == range;
+    private string GetSegmentClass(string range) => IsSelected(range) ? "segment selected" : "segment";
 
     private void LoadSavedAssets()
     {
