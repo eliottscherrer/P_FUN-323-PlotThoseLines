@@ -19,10 +19,6 @@
             }
         </select>
     </div>
-    <div class="col-md-3">
-        <label for="coinName">Or enter Coin ID manually:</label>
-        <input id="coinName" class="form-control" @bind="coinName" placeholder="e.g., bitcoin, ethereum" />
-    </div>
     <div class="col-md-2">
         <label for="interval">Interval:</label>
         <select id="interval" class="form-control" @bind="interval">
@@ -34,12 +30,6 @@
     <div class="col-md-2">
         <label for="dataLength">Data Length:</label>
         <input id="dataLength" type="number" class="form-control" @bind="dataLength" min="1" />
-    </div>
-    <div class="col-md-2">
-        <label for="currency">Currency:</label>
-        <select id="currency" class="form-control" @bind="vsCurrency">
-            <option value="usd">USD</option>
-        </select>
     </div>
 </div>
 <div class="row mb-3">
@@ -104,7 +94,6 @@ else if (coinHistoryData?.market_chart != null)
 }
 
 @code {
-    private string coinName = "bitcoin";
     private string interval = "day";
     private int dataLength = 30;
     private string vsCurrency = "usd";
@@ -252,20 +241,15 @@ else if (coinHistoryData?.market_chart != null)
     private void OnAssetSelected(ChangeEventArgs e)
     {
         selectedAssetId = e.Value?.ToString() ?? "";
-        if (!string.IsNullOrWhiteSpace(selectedAssetId))
-        {
-            coinName = selectedAssetId;
-        }
     }
 
     private async Task FetchData()
     {
-        // Use selected asset or manual input
-        var targetCoinId = !string.IsNullOrWhiteSpace(selectedAssetId) ? selectedAssetId : coinName;
-
+        // Require a selection from saved assets
+        var targetCoinId = selectedAssetId;
         if (string.IsNullOrWhiteSpace(targetCoinId))
         {
-            errorMessage = "Please select a saved asset or enter a valid coin ID";
+            errorMessage = "Please select a saved asset";
             return;
         }
 
