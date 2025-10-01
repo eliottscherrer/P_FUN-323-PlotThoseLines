@@ -127,10 +127,6 @@ else if (coinHistoryData?.market_chart != null)
     private List<LocalAsset>? savedAssets;
     private string selectedAssetId = "";
     private ApexChart<EnhancedMarketChart>? chartRef;
-    private EnhancedMarketChart? selectedDataPoint;
-    private double volumeScale = 1.0;
-    private string volumeSuffix = string.Empty;
-    private string VolumeSeriesName => string.IsNullOrEmpty(volumeSuffix) ? "Volume" : $"Volume ({volumeSuffix})";
     private string PriceSeriesName => $"Price ({vsCurrency?.ToUpper()})";
 
     private ApexChartOptions<EnhancedMarketChart> priceChartOptions = new()
@@ -273,11 +269,6 @@ else if (coinHistoryData?.market_chart != null)
             if (response?.data != null)
             {
                 coinHistoryData = response.data;
-                ComputeVolumeScale();
-                if (priceChartOptions?.Yaxis != null && priceChartOptions.Yaxis.Count > 1)
-                {
-                    priceChartOptions.Yaxis[1].Title = new AxisTitle { Text = VolumeSeriesName };
-                }
                 if (chartRef is not null)
                 {
                     await chartRef.UpdateOptionsAsync(true, true, false, null);
@@ -300,20 +291,6 @@ else if (coinHistoryData?.market_chart != null)
         {
             isLoading = false;
         }
-    }
-
-    private void ComputeVolumeScale()
-    {
-        double maxVol = coinHistoryData?.market_chart?.Max(m => m.vol_spot_24h) ?? 0;
-
-        (volumeScale, volumeSuffix) = maxVol switch
-        {
-            >= 1_000_000_000_000d => (1_000_000_000_000d, "T"),
-            >= 1_000_000_000d     => (1_000_000_000d, "B"),
-            >= 1_000_000d         => (1_000_000d, "M"),
-            >= 1_000d             => (1_000d, "K"),
-            _                     => (1.0, string.Empty)
-        };
     }
 
     public class ApiResponse
