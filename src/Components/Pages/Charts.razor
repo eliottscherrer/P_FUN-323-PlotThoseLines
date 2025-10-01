@@ -62,36 +62,23 @@
 
 @if (coinHistoryData?.market_chart != null && coinHistoryData.market_chart.Any())
 {
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">Price Chart (@vsCurrency?.ToUpper())</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-12">
-                    <ApexChart TItem="EnhancedMarketChart"
-                               Height="500"
-                               Options="priceChartOptions"
-                               @ref="chartRef">
+    <ApexChart TItem="EnhancedMarketChart" Options="priceChartOptions" @ref="chartRef">
+        <ApexCandleSeries TItem="EnhancedMarketChart"
+            Name="@PriceSeriesName"
+            Items="GetEnhancedChartData()"
+            XValue="@(p => p.DateTime)"
+            Open="@(p => (decimal)p.Open)"
+            High="@(p => (decimal)p.High)"
+            Low="@(p => (decimal)p.Low)"
+            Close="@(p => (decimal)p.Close)" />
 
-                        <ApexPointSeries TItem="EnhancedMarketChart"
-                                         Name="@PriceSeriesName"
-                                         Items="GetEnhancedChartData()"
-                                         SeriesType="SeriesType.Line"
-                                         XValue="@(e => e.DateTime)"
-                                         YValue="@(e => (decimal)Math.Round(e.Price, 2))" />
-
-                        <ApexPointSeries TItem="EnhancedMarketChart"
-                                         Name="@VolumeSeriesName"
-                                         Items="GetEnhancedChartData()"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.DateTime)"
-                                         YValue="@(e => (decimal)(e.Volume / volumeScale))" />
-                    </ApexChart>
-                </div>
-            </div>
-        </div>
-    </div>
+        <ApexPointSeries TItem="EnhancedMarketChart"
+            Name="@PriceSeriesName"
+            Items="GetEnhancedChartData()"
+            SeriesType="SeriesType.Line"
+            XValue="@(p => p.DateTime)"
+            YValue="@(p => (decimal)p.Price)" />
+    </ApexChart>
 }
 else if (coinHistoryData?.market_chart != null)
 {
@@ -133,7 +120,7 @@ else if (coinHistoryData?.market_chart != null)
     {
         Chart = new Chart
         {
-            Type = ChartType.Line,
+            Type = ChartType.Candlestick,
             Zoom = new Zoom { Enabled = true },
             Toolbar = new Toolbar { Show = true },
             ForeColor = "#334155"
@@ -160,12 +147,6 @@ else if (coinHistoryData?.market_chart != null)
             new YAxis
             {
                 Title = new AxisTitle { Text = "Price (USD)" },
-                Labels = new YAxisLabels()
-            },
-            new YAxis
-            {
-                Opposite = true,
-                Title = new AxisTitle { Text = "Volume" },
                 Labels = new YAxisLabels()
             }
         },
@@ -196,19 +177,59 @@ else if (coinHistoryData?.market_chart != null)
         Tooltip = new Tooltip { Shared = true, Intersect = false, X = new TooltipX { Format = "dd MMM yyyy HH:mm" } }
     };
 
-
     private List<EnhancedMarketChart> GetEnhancedChartData()
     {
-        if (coinHistoryData?.market_chart == null)
+        if (coinHistoryData?.market_chart == null || !coinHistoryData.market_chart.Any())
             return new List<EnhancedMarketChart>();
 
-        return coinHistoryData.market_chart.Select(entry => new EnhancedMarketChart
+        var rng = new Random();
+        var points = coinHistoryData.market_chart.ToArray();
+        var result = new List<EnhancedMarketChart>(points.Length);
+        double previousClose = points.First().price;
+
+        // Consts
+        const double anchorWeight = 0.7; // Make the "Close" stay not too different from the base price
+        const double maxJumpPct = 0.25;
+        const double noisePct = 0.003;
+        const double minWickPct = 0.002;
+        const double maxWickPct = 0.06;
+
+        result = points.Select(entry =>
         {
-            DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
-            Price = Math.Round(entry.price, 2),
-            MarketCap = entry.market_cap,
-            Volume = entry.vol_spot_24h
+            var basePrice = entry.price;
+            double open = previousClose;
+
+            double blended = anchorWeight * basePrice + (1 - anchorWeight) * open;
+            double noise = (rng.NextDouble() - 0.5) * 2 * noisePct * blended;
+            double closeUnclamped = blended + noise;
+
+            double minClose = open * (1 - maxJumpPct);
+            double maxClose = open * (1 + maxJumpPct);
+            double close = Math.Clamp(closeUnclamped, minClose, maxClose);
+
+            double bodyPct = Math.Abs(close - open) / open;
+            double wickPct = bodyPct * 0.6 + 0.003 + (rng.NextDouble() - 0.5) * 0.003;
+            wickPct = Math.Clamp(wickPct, minWickPct, maxWickPct);
+
+            double high = Math.Max(open, close) * (1.0 + wickPct);
+            double low = Math.Min(open, close) * (1.0 - wickPct);
+
+            previousClose = close;
+
+            return new EnhancedMarketChart
+            {
+                DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
+                Price = basePrice,
+                Open = Math.Round(open, 2),
+                Close = Math.Round(close, 2),
+                Low = Math.Round(low, 2),
+                High = Math.Round(high, 2),
+                MarketCap = entry.market_cap,
+                Volume = entry.vol_spot_24h
+            };
         }).ToList();
+
+        return result;
     }
 
     protected override void OnInitialized()
@@ -323,6 +344,10 @@ else if (coinHistoryData?.market_chart != null)
     {
         public DateTime DateTime { get; set; }
         public double Price { get; set; }
+        public double Open { get; set; }
+        public double Close { get; set; }
+        public double Low { get; set; }
+        public double High { get; set; }
         public double MarketCap { get; set; }
         public double Volume { get; set; }
     }
