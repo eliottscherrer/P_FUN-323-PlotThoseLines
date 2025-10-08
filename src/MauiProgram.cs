@@ -27,9 +27,10 @@ namespace PlotThoseLines
             // Services
             builder.Services.AddSingleton<LocalAssetService>();
             builder.Services.AddSingleton<SettingsService>();
+            builder.Services.AddSingleton<ChartsStateService>();
 
             // HttpClient with API key header (from saved settings or environment var)
-            builder.Services.AddScoped(sp =>
+            builder.Services.AddSingleton(sp =>
             {
                 var settings = sp.GetRequiredService<SettingsService>();
                 var apiKey = settings.GetApiKey();
@@ -42,6 +43,8 @@ namespace PlotThoseLines
                 }
                 return client;
             });
+            
+            builder.Services.AddSingleton<CoinHistoryService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();

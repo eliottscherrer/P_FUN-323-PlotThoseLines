@@ -1,8 +1,10 @@
-﻿@using Microsoft.AspNetCore.WebUtilities;
-@using Microsoft.AspNetCore.Components.Forms;
-@inject HttpClient Http
+﻿@using Microsoft.AspNetCore.Components.Forms;
+@using PlotThoseLines.Services;
 @inject LocalAssetService LocalAssetService
+@inject CoinHistoryService CoinHistoryService
+@inject ChartsStateService StateService
 @page "/"
+@implements IDisposable
 
 <div @onclick="CloseDropdown">
 <h1>Charts</h1>
@@ -200,8 +202,14 @@ else if (allAssetData.Any())
             if (selectedRange == value) return;
             selectedRange = value;
             ApplyPresetRange(value);
+            SaveStateToService();
             StateHasChanged();
         }
+    }
+
+    public void Dispose()
+    {
+        SaveStateToService();
     }
 
     private ApexChartOptions<EnhancedMarketChart> GetChartOptions(bool isSingleAsset)
@@ -271,65 +279,44 @@ else if (allAssetData.Any())
         };
     }
 
-    private List<EnhancedMarketChart> GetEnhancedChartData(CoinHistoryDataResponse? data)
-    {
-        if (data?.market_chart == null || !data.market_chart.Any())
-            return new List<EnhancedMarketChart>();
-
-        var rng = new Random();
-        var points = data.market_chart.ToArray();
-        var result = new List<EnhancedMarketChart>(points.Length);
-        double previousClose = points.First().price;
-
-        // Consts
-        const double anchorWeight = 0.7; // Make the "Close" stay not too different from the base price
-        const double maxJumpPct = 0.25;
-        const double noisePct = 0.003;
-        const double minWickPct = 0.002;
-        const double maxWickPct = 0.06;
-
-        result = points.Select(entry =>
-        {
-            var basePrice = entry.price;
-            double open = previousClose;
-
-            double blended = anchorWeight * basePrice + (1 - anchorWeight) * open;
-            double noise = (rng.NextDouble() - 0.5) * 2 * noisePct * blended;
-            double closeUnclamped = blended + noise;
-
-            double minClose = open * (1 - maxJumpPct);
-            double maxClose = open * (1 + maxJumpPct);
-            double close = Math.Clamp(closeUnclamped, minClose, maxClose);
-
-            double bodyPct = Math.Abs(close - open) / open;
-            double wickPct = bodyPct * 0.6 + 0.003 + (rng.NextDouble() - 0.5) * 0.003;
-            wickPct = Math.Clamp(wickPct, minWickPct, maxWickPct);
-
-            double high = Math.Max(open, close) * (1.0 + wickPct);
-            double low = Math.Min(open, close) * (1.0 - wickPct);
-
-            previousClose = close;
-
-            return new EnhancedMarketChart
-            {
-                DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
-                Price = basePrice,
-                Open = Math.Round(open, 2),
-                Close = Math.Round(close, 2),
-                Low = Math.Round(low, 2),
-                High = Math.Round(high, 2),
-                MarketCap = entry.market_cap,
-                Volume = entry.vol_spot_24h
-            };
-        }).ToList();
-
-        return result;
-    }
+        private List<EnhancedMarketChart> GetEnhancedChartData(CoinHistoryDataResponse? data) => CoinHistoryService.EnhanceChartData(data);
 
     protected override void OnInitialized()
     {
         LoadSavedAssets();
-        ApplyPresetRange(selectedRange);
+        
+        if (StateService.IsInitialized)
+        {
+            RestoreStateFromService();
+        }
+        else
+        {
+            ApplyPresetRange(selectedRange);
+            StateService.IsInitialized = true;
+        }
+    }
+
+    private void RestoreStateFromService()
+    {
+        interval = StateService.Interval;
+        dataLength = StateService.DataLength;
+        vsCurrency = StateService.VsCurrency;
+        allAssetData = StateService.AllAssetData;
+        selectedAssets = StateService.SelectedAssets;
+        selectedRange = StateService.SelectedRange;
+        errorMessage = StateService.ErrorMessage;
+    }
+
+    private void SaveStateToService()
+    {
+        StateService.Interval = interval;
+        StateService.DataLength = dataLength;
+        StateService.VsCurrency = vsCurrency;
+        StateService.AllAssetData = allAssetData;
+        StateService.SelectedAssets = selectedAssets;
+        StateService.SelectedRange = selectedRange;
+        StateService.ErrorMessage = errorMessage;
+        StateService.IsInitialized = true;
     }
 
     // From: https://tokeninsight-api.readme.io/reference/get_history-coins-id
@@ -407,6 +394,7 @@ else if (allAssetData.Any())
         {
             selectedAssets.Add(asset);
             isDropdownOpen = false;
+            SaveStateToService();
             StateHasChanged();
         }
     }
@@ -417,6 +405,7 @@ else if (allAssetData.Any())
         if (assetToRemove != null)
         {
             selectedAssets.Remove(assetToRemove);
+            SaveStateToService();
             StateHasChanged();
         }
     }
@@ -436,47 +425,12 @@ else if (allAssetData.Any())
 
         try
         {
-            // Fetch data for all selected assets
-            var fetchTasks = selectedAssets.Select(async asset =>
-            {
-                if (string.IsNullOrWhiteSpace(asset.Id))
-                    return (asset.Id, (CoinHistoryDataResponse?)null);
-
-                try
-                {
-                    var queryParams = new Dictionary<string, string?>
-                    {
-                        { "interval", interval },
-                        { "length", dataLength.ToString() },
-                        { "vs_currency", vsCurrency }
-                    };
-                    var url = QueryHelpers.AddQueryString($"history/coins/{asset.Id}", queryParams);
-                    var response = await Http.GetFromJsonAsync<ApiResponse>(url);
-
-                    if (response?.status?.code == 0 && response?.data != null)
-                    {
-                        return (asset.Id!, response.data);
-                    }
-                    
-                    return (asset.Id!, (CoinHistoryDataResponse?)null);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error fetching data for {asset.Symbol}: {ex.Message}");
-                    return (asset.Id!, (CoinHistoryDataResponse?)null);
-                }
-            });
-
-            var results = await Task.WhenAll(fetchTasks);
-            
-            // Store all results
-            foreach (var (assetId, data) in results)
-            {
-                if (!string.IsNullOrEmpty(assetId))
-                {
-                    allAssetData[assetId] = data;
-                }
-            }
+            // Use the service to fetch data for all selected assets
+            allAssetData = await CoinHistoryService.FetchHistoryDataAsync(
+                selectedAssets,
+                interval,
+                dataLength,
+                vsCurrency);
 
             // Check if any data was fetched successfully
             if (!allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_chart.Any()))
@@ -501,57 +455,8 @@ else if (allAssetData.Any())
         finally
         {
             isLoading = false;
+            SaveStateToService();
         }
-    }
-
-    public class ApiResponse
-    {
-        public CoinHistoryDataResponse? data { get; set; }
-        public Status? status { get; set; }
-    }
-
-    public class CoinHistoryDataResponse
-    {
-        public string? id { get; set; }
-        public string? logo { get; set; }
-        public MarketChart[]? market_chart { get; set; }
-        public string? name { get; set; }
-        public string? symbol { get; set; }
-        public string? vs_currency { get; set; }
-
-        public PageInfo? page_info { get; set; }
-    }
-
-    public class MarketChart
-    {
-        public double market_cap { get; set; }
-        public double price { get; set; }
-        public long timestamp { get; set; }
-        public double vol_spot_24h { get; set; }
-    }
-
-    public class EnhancedMarketChart
-    {
-        public DateTime DateTime { get; set; }
-        public double Price { get; set; }
-        public double Open { get; set; }
-        public double Close { get; set; }
-        public double Low { get; set; }
-        public double High { get; set; }
-        public double MarketCap { get; set; }
-        public double Volume { get; set; }
-    }
-
-    public class PageInfo
-    {
-        public int total_results { get; set; }
-    }
-
-    public class Status
-    {
-        public int code { get; set; }
-        public string? message { get; set; }
-        public long timestamp { get; set; }
     }
 
     private void CloseDropdown()
