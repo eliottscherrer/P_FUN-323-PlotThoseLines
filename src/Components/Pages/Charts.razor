@@ -4,23 +4,66 @@
 @inject LocalAssetService LocalAssetService
 @page "/"
 
+<div @onclick="CloseDropdown">
 <h1>Charts</h1>
 
 <div class="form-group row mb-3">
-    <div class="col-md-3">
-        <label for="savedAssets">Saved Assets:</label>
-        <select id="savedAssets" class="form-control" @onchange="OnAssetSelected">
-            <option value="">-- Select a saved asset --</option>
-            @if (savedAssets != null)
+    <div class="col-md-12 d-flex align-items-center gap-2">
+        @if (selectedAssets != null && selectedAssets.Any())
+        {
+            @foreach (var asset in selectedAssets)
             {
-                @foreach (var asset in savedAssets)
-                {
-                    <option value="@asset.Id">@asset.Name (@asset.Symbol?.ToUpper())</option>
-                }
+                <div class="asset-chip">
+                    @if (!string.IsNullOrEmpty(asset.Logo))
+                    {
+                        <img src="@asset.Logo" alt="@asset.Symbol" class="asset-chip-logo" />
+                    }
+                    <span class="asset-chip-text">@asset.Symbol?.ToUpper()</span>
+                    <button class="asset-chip-remove" @onclick="() => RemoveAsset(asset.Id)" title="Remove asset">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                    </button>
+                </div>
             }
-        </select>
+        }
+
+        @if (GetAvailableAssets().Count > 0)
+        {
+            <div class="dropdown-container" @onclick:stopPropagation="true">
+                <button class="add-asset-btn" @onclick="ToggleDropdown">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+                    <span>Add asset</span>
+                </button>
+                
+                @if (isDropdownOpen && savedAssets != null)
+                {
+                    <div class="asset-dropdown">
+                        @if (!savedAssets.Any())
+                        {
+                            <div class="dropdown-empty">No assets available</div>
+                        }
+                        else if (GetAvailableAssets().Count > 0)
+                        {
+                            @foreach (var asset in GetAvailableAssets())
+                            {
+                                <div class="dropdown-item" @onclick="() => AddAsset(asset)">
+                                    @if (!string.IsNullOrEmpty(asset.Logo))
+                                    {
+                                        <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
+                                    }
+                                    <span class="dropdown-item-name">@asset.Name</span>
+                                    <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        }
     </div>
-    <div class="col-md-9 d-flex align-items-end">
+</div>
+
+<div class="form-group row mb-3">
+    <div class="col-md-12 d-flex align-items-end">
         <div class="time-range-wrapper">
             <div class="segmented" role="tablist" aria-label="Time range">
                 <button type="button"
@@ -74,27 +117,46 @@
     </div>
 </div>
 
-@if (coinHistoryData?.market_chart != null && coinHistoryData.market_chart.Any())
+@if (allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_chart.Any()))
 {
-    <ApexChart TItem="EnhancedMarketChart" Options="priceChartOptions" @ref="chartRef">
-        <ApexCandleSeries TItem="EnhancedMarketChart"
-            Name="@PriceSeriesName"
-            Items="GetEnhancedChartData()"
-            XValue="@(p => p.DateTime)"
-            Open="@(p => (decimal)p.Open)"
-            High="@(p => (decimal)p.High)"
-            Low="@(p => (decimal)p.Low)"
-            Close="@(p => (decimal)p.Close)" />
-
-        <ApexPointSeries TItem="EnhancedMarketChart"
-            Name="@PriceSeriesName"
-            Items="GetEnhancedChartData()"
-            SeriesType="SeriesType.Line"
-            XValue="@(p => p.DateTime)"
-            YValue="@(p => (decimal)p.Price)" />
+    var validAssets = allAssetData.Where(d => d.Value?.market_chart != null && d.Value.market_chart.Any()).ToList();
+    var isSingleAsset = validAssets.Count == 1;
+    
+    <ApexChart TItem="EnhancedMarketChart" Options="GetChartOptions(isSingleAsset)" @ref="chartRef">
+        @* Switch to line charts whenever we have multiple assets on the chart to avoid overlap of colors and imporve clarity *@
+        @if (isSingleAsset)
+        {
+            var assetData = validAssets.First();
+            var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
+            var seriesName = asset?.Symbol?.ToUpper() ?? assetData.Key;
+            
+            <ApexCandleSeries TItem="EnhancedMarketChart"
+                Name="@seriesName"
+                Items="GetEnhancedChartData(assetData.Value)"
+                XValue="@(p => p.DateTime)"
+                Open="@(p => (decimal)p.Open)"
+                High="@(p => (decimal)p.High)"
+                Low="@(p => (decimal)p.Low)"
+                Close="@(p => (decimal)p.Close)" />
+        }
+        else
+        {
+            @foreach (var assetData in validAssets)
+            {
+                var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
+                var seriesName = asset?.Symbol?.ToUpper() ?? assetData.Key;
+                
+                <ApexPointSeries TItem="EnhancedMarketChart"
+                    Name="@seriesName"
+                    Items="GetEnhancedChartData(assetData.Value)"
+                    SeriesType="SeriesType.Line"
+                    XValue="@(p => p.DateTime)"
+                    YValue="@(p => (decimal)p.Price)" />
+            }
+        }
     </ApexChart>
 }
-else if (coinHistoryData?.market_chart != null)
+else if (allAssetData.Any())
 {
     <div class="alert alert-info">
         <strong>No chart data available.</strong> The dataset is empty.
@@ -121,13 +183,14 @@ else if (coinHistoryData?.market_chart != null)
     private string interval = "day";
     private int dataLength = 30;
     private string vsCurrency = "usd";
-    private CoinHistoryDataResponse? coinHistoryData;
+    private Dictionary<string, CoinHistoryDataResponse?> allAssetData = new();
     private bool isLoading = false;
     private string? errorMessage;
     private List<LocalAsset>? savedAssets;
+    private List<LocalAsset> selectedAssets = new();
     private string selectedAssetId = "";
     private ApexChart<EnhancedMarketChart>? chartRef;
-    private string PriceSeriesName => $"Price ({vsCurrency?.ToUpper()})";
+    private bool isDropdownOpen = false;
     private string selectedRange = "1m";
     private string SelectedRange
     {
@@ -141,15 +204,17 @@ else if (coinHistoryData?.market_chart != null)
         }
     }
 
-    private ApexChartOptions<EnhancedMarketChart> priceChartOptions = new()
+    private ApexChartOptions<EnhancedMarketChart> GetChartOptions(bool isSingleAsset)
     {
-        Chart = new Chart
+        return new ApexChartOptions<EnhancedMarketChart>
         {
-            Type = ChartType.Candlestick,
-            Zoom = new Zoom { Enabled = true },
-            Toolbar = new Toolbar { Show = true },
-            ForeColor = "#334155"
-        },
+            Chart = new Chart
+            {
+                Type = isSingleAsset ? ChartType.Candlestick : ChartType.Line, // Switch to line charts whenever we have multiple assets on the chart to avoid overlap of colors and imporve clarity
+                Zoom = new Zoom { Enabled = true },
+                Toolbar = new Toolbar { Show = true },
+                ForeColor = "#334155"
+            },
         Xaxis = new XAxis
         {
             Type = XAxisType.Datetime,
@@ -197,26 +262,22 @@ else if (coinHistoryData?.market_chart != null)
                     Upward = "#d71515",
                     Downward = "#5a9f68"
                 }
-            },
-            Bar = new PlotOptionsBar
-            {
-                Horizontal = false,
-                ColumnWidth = "60%",
-                BorderRadius = 2
             }
         },
-        Colors = new List<string> { "#2E93FA", "#A3E635" },
+        // Random colors otherwise all the lines are blue and it's bad for clarity
+        Colors = new List<string> { "#2E93FA", "#A3E635", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316" },
         Legend = new Legend { Show = true, Position = LegendPosition.Top },
         Tooltip = new Tooltip { Shared = true, Intersect = false, X = new TooltipX { Format = "dd MMM yyyy HH:mm" } }
-    };
+        };
+    }
 
-    private List<EnhancedMarketChart> GetEnhancedChartData()
+    private List<EnhancedMarketChart> GetEnhancedChartData(CoinHistoryDataResponse? data)
     {
-        if (coinHistoryData?.market_chart == null || !coinHistoryData.market_chart.Any())
+        if (data?.market_chart == null || !data.market_chart.Any())
             return new List<EnhancedMarketChart>();
 
         var rng = new Random();
-        var points = coinHistoryData.market_chart.ToArray();
+        var points = data.market_chart.ToArray();
         var result = new List<EnhancedMarketChart>(points.Length);
         double previousClose = points.First().price;
 
@@ -327,44 +388,105 @@ else if (coinHistoryData?.market_chart != null)
         selectedAssetId = e.Value?.ToString() ?? "";
     }
 
+    private void ToggleDropdown()
+    {
+        isDropdownOpen = !isDropdownOpen;
+    }
+
+    private List<LocalAsset> GetAvailableAssets()
+    {
+        if (savedAssets == null) return new List<LocalAsset>();
+        
+        // Return only assets that are not already selected
+        return savedAssets.Where(a => !selectedAssets.Any(s => s.Id == a.Id)).ToList();
+    }
+
+    private void AddAsset(LocalAsset asset)
+    {
+        if (!selectedAssets.Any(a => a.Id == asset.Id))
+        {
+            selectedAssets.Add(asset);
+            isDropdownOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveAsset(string? assetId)
+    {
+        var assetToRemove = selectedAssets.FirstOrDefault(a => a.Id == assetId);
+        if (assetToRemove != null)
+        {
+            selectedAssets.Remove(assetToRemove);
+            StateHasChanged();
+        }
+    }
+
     private async Task FetchData()
     {
-        // Require a selection from saved assets
-        var targetCoinId = selectedAssetId;
-        if (string.IsNullOrWhiteSpace(targetCoinId))
+        // Require at least one selected asset
+        if (!selectedAssets.Any())
         {
-            errorMessage = "Please select a saved asset";
+            errorMessage = "Please add at least one asset to the chart";
             return;
         }
 
         isLoading = true;
         errorMessage = null;
-        coinHistoryData = null;
+        allAssetData.Clear();
 
         try
         {
-            var queryParams = new Dictionary<string, string?>
+            // Fetch data for all selected assets
+            var fetchTasks = selectedAssets.Select(async asset =>
             {
-                { "interval", interval },
-                { "length", dataLength.ToString() },
-                { "vs_currency", vsCurrency }
-            };
-            var url = QueryHelpers.AddQueryString($"history/coins/{targetCoinId}", queryParams);
-            var response = await Http.GetFromJsonAsync<ApiResponse>(url);
+                if (string.IsNullOrWhiteSpace(asset.Id))
+                    return (asset.Id, (CoinHistoryDataResponse?)null);
 
-            if (response?.status?.code != 0)
-                errorMessage = $"{response?.status?.timestamp} - Error {response?.status?.code}: {response?.status?.message}";
-
-            if (response?.data != null)
-            {
-                coinHistoryData = response.data;
-                if (chartRef is not null)
+                try
                 {
-                    await chartRef.UpdateOptionsAsync(true, true, false, null);
+                    var queryParams = new Dictionary<string, string?>
+                    {
+                        { "interval", interval },
+                        { "length", dataLength.ToString() },
+                        { "vs_currency", vsCurrency }
+                    };
+                    var url = QueryHelpers.AddQueryString($"history/coins/{asset.Id}", queryParams);
+                    var response = await Http.GetFromJsonAsync<ApiResponse>(url);
+
+                    if (response?.status?.code == 0 && response?.data != null)
+                    {
+                        return (asset.Id!, response.data);
+                    }
+                    
+                    return (asset.Id!, (CoinHistoryDataResponse?)null);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error fetching data for {asset.Symbol}: {ex.Message}");
+                    return (asset.Id!, (CoinHistoryDataResponse?)null);
+                }
+            });
+
+            var results = await Task.WhenAll(fetchTasks);
+            
+            // Store all results
+            foreach (var (assetId, data) in results)
+            {
+                if (!string.IsNullOrEmpty(assetId))
+                {
+                    allAssetData[assetId] = data;
                 }
             }
-            else
-                errorMessage = "No data found.";
+
+            // Check if any data was fetched successfully
+            if (!allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_chart.Any()))
+            {
+                errorMessage = "No data could be fetched for any of the selected assets.";
+            }
+            else if (chartRef is not null)
+            {
+                await chartRef.UpdateOptionsAsync(true, true, false, null);
+            }
         }
         catch (Exception ex)
         {
@@ -431,4 +553,14 @@ else if (coinHistoryData?.market_chart != null)
         public string? message { get; set; }
         public long timestamp { get; set; }
     }
+
+    private void CloseDropdown()
+    {
+        if (isDropdownOpen)
+        {
+            isDropdownOpen = false;
+            StateHasChanged();
+        }
+    }
 }
+</div>
