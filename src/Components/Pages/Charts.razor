@@ -190,6 +190,14 @@ else if (coinHistoryData?.market_chart != null)
         },
         PlotOptions = new PlotOptions
         {
+            Candlestick = new PlotOptionsCandlestick
+            {
+                Colors = new PlotOptionsCandlestickColors
+                {
+                    Upward = "#d71515",
+                    Downward = "#5a9f68"
+                }
+            },
             Bar = new PlotOptionsBar
             {
                 Horizontal = false,
