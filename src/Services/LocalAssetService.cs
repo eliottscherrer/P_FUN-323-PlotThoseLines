@@ -1,7 +1,56 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PlotThoseLines.Services
 {
+    public class NullableDoubleConverter : JsonConverter<double?>
+    {
+        public override double? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                var stringValue = reader.GetString();
+                if (string.IsNullOrWhiteSpace(stringValue) || 
+                    stringValue.Equals("null", StringComparison.OrdinalIgnoreCase) ||
+                    stringValue.Equals("nan", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                if (double.TryParse(stringValue, out var result))
+                {
+                    return result;
+                }
+
+                return null;
+            }
+
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                return reader.GetDouble();
+            }
+
+            return null;
+        }
+
+        public override void Write(Utf8JsonWriter writer, double? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue)
+            {
+                writer.WriteNumberValue(value.Value);
+            }
+            else
+            {
+                writer.WriteNullValue();
+            }
+        }
+    }
+
     public class LocalAssetService
     {
         private readonly string _assetsFilePath;
@@ -20,6 +69,16 @@ namespace PlotThoseLines.Services
         public List<LocalAsset> GetAssets()
         {
             return _assets.ToList();
+        }
+
+        public List<LocalAsset> GetApiAssets()
+        {
+            return _assets.Where(a => a.IsLocal == false).ToList();
+        }
+
+        public List<LocalAsset> GetLocalAssets()
+        {
+            return _assets.Where(a => a.IsLocal == true).ToList();
         }
 
         public async Task<bool> AddAssetAsync(LocalAsset asset)
@@ -76,5 +135,25 @@ namespace PlotThoseLines.Services
         public double Price { get; set; }
         public DateTime DateAdded { get; set; } = DateTime.Now;
         public string? Url { get; set; }
+        public bool IsLocal { get; set; } = false;
+        public List<LocalAssetHistoryData>? HistoryData { get; set; }
+    }
+
+    public class LocalAssetHistoryData
+    {
+        [JsonPropertyName("Date")]
+        public string? Date { get; set; }
+        
+        [JsonPropertyName("Price")]
+        [JsonConverter(typeof(NullableDoubleConverter))]
+        public double? Price { get; set; }
+        
+        [JsonPropertyName("Volume")]
+        [JsonConverter(typeof(NullableDoubleConverter))]
+        public double? Volume { get; set; }
+        
+        [JsonPropertyName("Market_cap")]
+        [JsonConverter(typeof(NullableDoubleConverter))]
+        public double? Market_cap { get; set; }
     }
 }

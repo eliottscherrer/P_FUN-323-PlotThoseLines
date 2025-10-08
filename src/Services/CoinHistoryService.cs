@@ -28,6 +28,15 @@ namespace PlotThoseLines.Services
 
                 try
                 {
+                    // Check if this is a local asset
+                    if (asset.IsLocal && asset.HistoryData != null && asset.HistoryData.Any())
+                    {
+                        // Convert local asset data to API format on a background thread
+                        var localData = await Task.Run(() => ConvertLocalAssetToApiFormat(asset));
+                        return (asset.Id!, localData);
+                    }
+
+                    // Fetch from API for non-local assets
                     var queryParams = new Dictionary<string, string?>
                     {
                         { "interval", interval },
@@ -62,6 +71,92 @@ namespace PlotThoseLines.Services
             }
 
             return result;
+        }
+
+        private CoinHistoryDataResponse ConvertLocalAssetToApiFormat(LocalAsset asset)
+        {
+            if (asset.HistoryData == null || !asset.HistoryData.Any())
+            {
+                return new CoinHistoryDataResponse
+                {
+                    id = asset.Id,
+                    name = asset.Name,
+                    symbol = asset.Symbol,
+                    logo = asset.Logo,
+                    market_chart = Array.Empty<MarketChart>()
+                };
+            }
+
+            try
+            {
+                var marketChartData = asset.HistoryData
+                    .AsParallel() // Use parallel processing for large datasets
+                    .Where(data => data.Price.HasValue) // Filter out entries with null prices
+                    .Select(data =>
+                    {
+                        // Parse the date string to Unix timestamp
+                        long timestamp = 0;
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(data.Date))
+                            {
+                                // Try to parse the date more efficiently
+                                if (DateTime.TryParse(data.Date, out var parsedDate))
+                                {
+                                    timestamp = new DateTimeOffset(parsedDate).ToUnixTimeMilliseconds();
+                                }
+                                else
+                                {
+                                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                }
+                            }
+                            else
+                            {
+                                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error parsing date '{data.Date}': {ex.Message}");
+                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        }
+
+                        return new MarketChart
+                        {
+                            timestamp = timestamp,
+                            price = data.Price.GetValueOrDefault(0.0),
+                            market_cap = data.Market_cap.GetValueOrDefault(0.0),
+                            vol_spot_24h = data.Volume.GetValueOrDefault(0.0)
+                        };
+                    })
+                    .OrderBy(m => m.timestamp)
+                    .ToArray();
+
+                Console.WriteLine($"Converted {marketChartData.Length} data points for local asset {asset.Symbol}");
+
+                return new CoinHistoryDataResponse
+                {
+                    id = asset.Id,
+                    name = asset.Name,
+                    symbol = asset.Symbol,
+                    logo = asset.Logo,
+                    market_chart = marketChartData,
+                    vs_currency = "usd"
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error converting local asset data for {asset.Symbol}: {ex.Message}");
+                return new CoinHistoryDataResponse
+                {
+                    id = asset.Id,
+                    name = asset.Name,
+                    symbol = asset.Symbol,
+                    logo = asset.Logo,
+                    market_chart = Array.Empty<MarketChart>(),
+                    vs_currency = "usd"
+                };
+            }
         }
 
         public List<EnhancedMarketChart> EnhanceChartData(CoinHistoryDataResponse? data)

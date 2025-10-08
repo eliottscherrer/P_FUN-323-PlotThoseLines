@@ -15,11 +15,19 @@
         {
             @foreach (var asset in selectedAssets)
             {
-                <div class="asset-chip">
-                    @if (!string.IsNullOrEmpty(asset.Logo))
-                    {
-                        <img src="@asset.Logo" alt="@asset.Symbol" class="asset-chip-logo" />
-                    }
+                <div class="asset-chip @(asset.IsLocal ? "local-asset-chip" : "")">
+                    <div class="position-relative">
+                        @if (!string.IsNullOrEmpty(asset.Logo))
+                        {
+                            <img src="@asset.Logo" alt="@asset.Symbol" class="asset-chip-logo" />
+                        }
+                        @if (asset.IsLocal)
+                        {
+                            <span class="chip-local-badge">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                            </span>
+                        }
+                    </div>
                     <span class="asset-chip-text">@asset.Symbol?.ToUpper()</span>
                     <button class="asset-chip-remove" @onclick="() => RemoveAsset(asset.Id)" title="Remove asset">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
@@ -45,16 +53,53 @@
                         }
                         else if (GetAvailableAssets().Count > 0)
                         {
-                            @foreach (var asset in GetAvailableAssets())
+                            @* API Assets Section *@
+                            @if (GetAvailableApiAssets().Any())
                             {
-                                <div class="dropdown-item" @onclick="() => AddAsset(asset)">
-                                    @if (!string.IsNullOrEmpty(asset.Logo))
-                                    {
-                                        <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
-                                    }
-                                    <span class="dropdown-item-name">@asset.Name</span>
-                                    <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
+                                <div class="dropdown-section-header">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>
+                                    API Assets
                                 </div>
+                                @foreach (var asset in GetAvailableApiAssets())
+                                {
+                                    <div class="dropdown-item" @onclick="() => AddAsset(asset)">
+                                        @if (!string.IsNullOrEmpty(asset.Logo))
+                                        {
+                                            <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
+                                        }
+                                        <span class="dropdown-item-name">@asset.Name</span>
+                                        <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
+                                    </div>
+                                }
+                            }
+                            
+                            @* Local Assets Section *@
+                            @if (GetAvailableLocalAssets().Any())
+                            {
+                                @if (GetAvailableApiAssets().Any())
+                                {
+                                    <div class="dropdown-divider"></div>
+                                }
+                                <div class="dropdown-section-header">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                                    Local Assets
+                                </div>
+                                @foreach (var asset in GetAvailableLocalAssets())
+                                {
+                                    <div class="dropdown-item local-dropdown-item" @onclick="() => AddAsset(asset)">
+                                        <div class="position-relative">
+                                            @if (!string.IsNullOrEmpty(asset.Logo))
+                                            {
+                                                <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
+                                            }
+                                            <span class="dropdown-local-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                                            </span>
+                                        </div>
+                                        <span class="dropdown-item-name">@asset.Name</span>
+                                        <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
+                                    </div>
+                                }
                             }
                         }
                     </div>
@@ -386,6 +431,16 @@ else if (allAssetData.Any())
         
         // Return only assets that are not already selected
         return savedAssets.Where(a => !selectedAssets.Any(s => s.Id == a.Id)).ToList();
+    }
+
+    private List<LocalAsset> GetAvailableApiAssets()
+    {
+        return GetAvailableAssets().Where(a => !a.IsLocal).ToList();
+    }
+
+    private List<LocalAsset> GetAvailableLocalAssets()
+    {
+        return GetAvailableAssets().Where(a => a.IsLocal).ToList();
     }
 
     private void AddAsset(LocalAsset asset)

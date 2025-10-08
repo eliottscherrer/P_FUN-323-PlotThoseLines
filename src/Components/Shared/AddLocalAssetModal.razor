@@ -1,0 +1,314 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using PlotThoseLines.Services
+@using System.Text.Json
+@inject LocalAssetService LocalAssetService
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop show" @onclick="Close"></div>
+    
+    <div class="modal show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 600px;">
+            <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                <div class="modal-header" style="border-bottom: 1px solid #e9ecef; padding: 1.5rem;">
+                    <h5 class="modal-title fw-bold">New Local Asset</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="Close"></button>
+                </div>
+                <div class="modal-body" style="padding: 2rem;">
+                    <div class="row">
+                        <div class="col-md-5 d-flex flex-column align-items-center justify-content-center">
+                            <div class="logo-upload-container" @onclick="TriggerFileInput" style="cursor: pointer;">
+                                @if (!string.IsNullOrEmpty(logoBase64))
+                                {
+                                    <img src="@logoBase64" alt="Logo" class="uploaded-logo" />
+                                }
+                                else
+                                {
+                                    <div class="logo-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #6c757d;">
+                                            <path d="M12 5v14M5 12h14"/>
+                                        </svg>
+                                        <div class="mt-2" style="font-size: 0.875rem; color: #6c757d;">Logo</div>
+                                    </div>
+                                }
+                            </div>
+                            <InputFile id="logoInput" @ref="logoInputRef" OnChange="HandleLogoUpload" accept="image/*" style="display: none;" />
+                        </div>
+                        
+                        <div class="col-md-7">
+                            <div class="form-group mb-3">
+                                <label class="form-label text-muted" style="font-size: 0.875rem; margin-bottom: 0.5rem;">Name</label>
+                                <input type="text" class="form-control" @bind="assetName" placeholder="Bitcoin" style="border: 1px solid #dee2e6; border-radius: 8px; padding: 0.75rem;" />
+                            </div>
+                            
+                            <div class="form-group mb-3">
+                                <label class="form-label text-muted" style="font-size: 0.875rem; margin-bottom: 0.5rem;">Symbol</label>
+                                <input type="text" class="form-control" @bind="assetSymbol" placeholder="BTC" style="border: 1px solid #dee2e6; border-radius: 8px; padding: 0.75rem;" />
+                            </div>
+                            
+                            <div class="form-group">
+                                @if (string.IsNullOrEmpty(jsonFileName))
+                                {
+                                    <button type="button" class="btn btn-outline-secondary w-100" @onclick="TriggerJsonFileInput" style="border: 1px solid #dee2e6; border-radius: 8px; padding: 0.75rem; display: flex; align-items: center; justify-content: center;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="17 8 12 3 7 8"/>
+                                            <line x1="12" y1="3" x2="12" y2="15"/>
+                                        </svg>
+                                        Import from file (.json)
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-secondary w-100" @onclick="TriggerJsonFileInput" style="border: 1px solid #dee2e6; border-radius: 8px; padding: 0.75rem; display: flex; align-items: center; justify-content: center;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+                                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                                            <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                                            <circle cx="10" cy="12" r="2"/>
+                                            <path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22"/>
+                                        </svg>
+                                        @jsonFileName
+                                    </button>
+                                }
+                                <InputFile id="jsonInput" @ref="jsonInputRef" OnChange="HandleJsonUpload" accept=".json" style="display: none;" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrWhiteSpace(errorMessage))
+                    {
+                        <div class="alert alert-danger mt-3" role="alert" style="border-radius: 8px;">
+                            @errorMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(successMessage))
+                    {
+                        <div class="alert alert-success mt-3" role="alert" style="border-radius: 8px;">
+                            @successMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #e9ecef; padding: 1.5rem;">
+                    <button type="button" class="btn btn-primary w-100" @onclick="AddLocalAsset" disabled="@isAdding" style="background-color: #6366f1; border: none; border-radius: 8px; padding: 0.75rem; font-weight: 500;">
+                        @if (isAdding)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Adding...</span>
+                            </span>
+                            <span>Adding...</span>
+                        }
+                        else
+                        {
+                            <span>Add new asset</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnAssetAdded { get; set; }
+
+    private string assetName = "";
+    private string assetSymbol = "";
+    private string? logoBase64;
+    private string? jsonFileName;
+    private List<LocalAssetHistoryData>? historyData;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isAdding = false;
+    private InputFile? logoInputRef;
+    private InputFile? jsonInputRef;
+
+    private async Task TriggerFileInput()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('logoInput').click()");
+    }
+
+    private async Task TriggerJsonFileInput()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('jsonInput').click()");
+    }
+
+    private async Task HandleLogoUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                var buffer = new byte[file.Size];
+                await file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024).ReadAsync(buffer);
+                var base64 = Convert.ToBase64String(buffer);
+                logoBase64 = $"data:{file.ContentType};base64,{base64}";
+                errorMessage = null;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error uploading logo: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task HandleJsonUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+                using var reader = new StreamReader(stream);
+                var jsonContent = await reader.ReadToEndAsync();
+                
+                historyData = JsonSerializer.Deserialize<List<LocalAssetHistoryData>>(jsonContent);
+                
+                if (historyData != null && historyData.Any())
+                {
+                    jsonFileName = file.Name;
+                    errorMessage = null;
+                }
+                else
+                {
+                    errorMessage = "The JSON file is empty or invalid.";
+                    historyData = null;
+                    jsonFileName = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error reading JSON file: {ex.Message}";
+                historyData = null;
+                jsonFileName = null;
+            }
+        }
+    }
+
+    private async Task AddLocalAsset()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        if (string.IsNullOrWhiteSpace(assetName))
+        {
+            errorMessage = "Please enter an asset name.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(assetSymbol))
+        {
+            errorMessage = "Please enter an asset symbol.";
+            return;
+        }
+
+        if (historyData == null || !historyData.Any())
+        {
+            errorMessage = "Please import a valid JSON file with history data.";
+            return;
+        }
+
+        isAdding = true;
+
+        try
+        {
+            var localAsset = new LocalAsset
+            {
+                Id = $"local_{assetSymbol.ToLower()}_{DateTime.Now.Ticks}",
+                Name = assetName,
+                Symbol = assetSymbol,
+                Logo = logoBase64 ?? "https://via.placeholder.com/40",
+                Price = historyData.OrderByDescending(h => h.Date).FirstOrDefault()?.Price ?? 0.0,
+                IsLocal = true,
+                HistoryData = historyData,
+                DateAdded = DateTime.Now
+            };
+
+            var success = await LocalAssetService.AddAssetAsync(localAsset);
+            
+            if (success)
+            {
+                successMessage = $"{assetName} has been added to your local assets!";
+                await Task.Delay(1500);
+                await OnAssetAdded.InvokeAsync();
+                await Close();
+            }
+            else
+            {
+                errorMessage = $"{assetName} is already in your asset list.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error adding local asset: {ex.Message}";
+        }
+        finally
+        {
+            isAdding = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        assetName = "";
+        assetSymbol = "";
+        logoBase64 = null;
+        jsonFileName = null;
+        historyData = null;
+        errorMessage = null;
+        successMessage = null;
+        await OnClose.InvokeAsync();
+    }
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+    }
+
+    .modal {
+        z-index: 1050;
+    }
+
+    .logo-upload-container {
+        width: 200px;
+        height: 200px;
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8f9fa;
+        transition: all 0.2s ease;
+    }
+
+    .logo-upload-container:hover {
+        border-color: #6366f1;
+        background-color: #f0f0ff;
+    }
+
+    .logo-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .uploaded-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 10px;
+    }
+</style>
