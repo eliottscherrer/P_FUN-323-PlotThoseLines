@@ -1,5 +1,6 @@
 ﻿@using Microsoft.AspNetCore.Components.Forms;
 @using PlotThoseLines.Services;
+@using PlotThoseLines.Extensions;
 @using System.Text.Json;
 @inject LocalAssetService LocalAssetService
 @inject CoinHistoryService CoinHistoryService
@@ -188,7 +189,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trending-down-icon lucide-trending-down"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
                             <span>Min</span>
                         </div>
-                        <div class="stat-value">$@stats.Min.ToString("N2")</div>
+                        <div class="stat-value">$@(((decimal)stats.Min).ToShortNumber())</div>
                         <div class="stat-date">@stats.MinDate.ToString("MMM dd, HH:mm")</div>
                     </div>
                     <div class="stat-divider"></div>
@@ -197,7 +198,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trending-up-icon lucide-trending-up"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
                             <span>Max</span>
                         </div>
-                        <div class="stat-value">$@stats.Max.ToString("N2")</div>
+                        <div class="stat-value">$@(((decimal)stats.Max).ToShortNumber())</div>
                         <div class="stat-date">@stats.MaxDate.ToString("MMM dd, HH:mm")</div>
                     </div>
                     <div class="stat-divider"></div>
@@ -206,7 +207,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-brackets-icon lucide-brackets"><path d="M16 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3"/><path d="M8 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"/></svg>
                             <span>Range</span>
                         </div>
-                        <div class="stat-value stat-range-value">$@stats.Range.ToString("N2")</div>
+                        <div class="stat-value stat-range-value">$@(((decimal)stats.Range).ToShortNumber())</div>
                         <div class="stat-percentage @(stats.PercentageChange >= 0 ? "positive" : "negative")">
                             @(stats.PercentageChange >= 0 ? "+" : "")@stats.PercentageChange.ToString("N2")%
                         </div>
@@ -275,6 +276,7 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
         <strong>@alertTitle:</strong> @errorMessage
     </div>
 }
+</div>
 
     @code {
         private string interval = "day";
@@ -327,6 +329,7 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
             Chart = new Chart
             {
                 Type = useCandlestick ? ChartType.Candlestick : ChartType.Line,
+                Height = 600,
                 Zoom = new Zoom { Enabled = true },
                 Toolbar = new Toolbar { Show = true },
                 ForeColor = "#334155"
@@ -355,9 +358,18 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
                 Title = new AxisTitle { Text = "Price (USD)" },
                 Labels = new YAxisLabels
                 {
-                    Formatter = @"function (value) {
-                                     return '$' + Number(value).toFixed(2);
-                                 }"
+                Formatter = @"  function toShortNumber(number) {
+                                    if (number >= 1_000_000_000)
+                                        return (number / 1_000_000_000) + 'B';
+                                    
+                                    if (number >= 1_000_000)
+                                        return (number / 1_000_000) + 'M';
+                                    
+                                    if (number >= 1_000)
+                                        return (number / 1_000) + 'K';
+                                    
+                                    return number;
+                                }"
                 }
             }
         },
@@ -701,4 +713,3 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
         }
     }
 }
-</div>

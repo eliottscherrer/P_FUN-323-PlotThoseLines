@@ -1,5 +1,6 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using PlotThoseLines.Services
+@using PlotThoseLines.Extensions
 @inject HttpClient Http
 @inject LocalAssetService LocalAssetService
 
@@ -44,7 +45,7 @@
                                             <div>
                                                 <strong>@coin.name</strong> (@coin.symbol?.ToUpper())
                                                 <br />
-                                                <small class="text-muted">@coin.price.ToString("C2")</small>
+                                                <small class="text-muted">$@(((decimal)coin.price).ToShortNumber())</small>
                                             </div>
                                         </div>
                                         <button class="btn btn-success btn-sm" 

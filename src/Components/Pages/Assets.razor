@@ -1,4 +1,5 @@
 ﻿@using Microsoft.AspNetCore.WebUtilities;
+@using PlotThoseLines.Extensions;
 @inject HttpClient Http
 @inject LocalAssetService LocalAssetService
 @page "/assets"
@@ -23,7 +24,7 @@
                     </div>
                     <div class="d-flex align-items-center">
                         <div class="text-end me-3">
-                            <div class="fw-bold">@asset.Price.ToString("C2")</div>
+                            <div class="fw-bold">$@asset.Price.ToShortNumber()</div>
                             <small class="text-muted">Added: @asset.DateAdded.ToString("MMM dd, yyyy")</small>
                         </div>
                         <button class="btn btn-outline-danger btn-sm" 
@@ -82,7 +83,7 @@
                     </div>
                     <div class="d-flex align-items-center">
                         <div class="text-end me-3">
-                            <div class="fw-bold">@asset.Price.ToString("C2")</div>
+                            <div class="fw-bold">$@asset.Price.ToShortNumber()</div>
                             <small class="text-muted">@(asset.HistoryData?.Count ?? 0) data points</small>
                         </div>
                         <button class="btn btn-outline-danger btn-sm" 
