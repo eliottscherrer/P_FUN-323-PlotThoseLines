@@ -11,107 +11,105 @@
 <h1>Charts</h1>
 
 <div class="form-group row mb-3">
-    <div class="col-md-12 d-flex align-items-center gap-2">
-        @if (selectedAssets != null && selectedAssets.Any())
-        {
-            @foreach (var asset in selectedAssets)
+    <div class="col-md-12 controls-container">
+        <div class="assets-section">
+            @if (selectedAssets != null && selectedAssets.Any())
             {
-                <div class="asset-chip @(asset.IsLocal ? "local-asset-chip" : "")">
-                    <div class="position-relative">
-                        @if (!string.IsNullOrEmpty(asset.Logo))
-                        {
-                            <img src="@asset.Logo" alt="@asset.Symbol" class="asset-chip-logo" />
-                        }
-                        @if (asset.IsLocal)
-                        {
-                            <span class="chip-local-badge">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
-                            </span>
-                        }
-                    </div>
-                    <span class="asset-chip-text">@asset.Symbol?.ToUpper()</span>
-                    <button class="asset-chip-remove" @onclick="() => RemoveAsset(asset.Id)" title="Remove asset">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                    </button>
-                </div>
-            }
-        }
-
-        @if (GetAvailableAssets().Count > 0)
-        {
-            <div class="dropdown-container" @onclick:stopPropagation="true">
-                <button class="add-asset-btn" @onclick="ToggleDropdown">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
-                    <span>Add asset</span>
-                </button>
-                
-                @if (isDropdownOpen && savedAssets != null)
+                @foreach (var asset in selectedAssets)
                 {
-                    <div class="asset-dropdown">
-                        @if (!savedAssets.Any())
-                        {
-                            <div class="dropdown-empty">No assets available</div>
-                        }
-                        else if (GetAvailableAssets().Count > 0)
-                        {
-                            @* API Assets Section *@
-                            @if (GetAvailableApiAssets().Any())
+                    <div class="asset-chip @(asset.IsLocal ? "local-asset-chip" : "")">
+                        <div class="position-relative">
+                            @if (!string.IsNullOrEmpty(asset.Logo))
                             {
-                                <div class="dropdown-section-header">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>
-                                    API Assets
-                                </div>
-                                @foreach (var asset in GetAvailableApiAssets())
-                                {
-                                    <div class="dropdown-item" @onclick="() => AddAsset(asset)">
-                                        @if (!string.IsNullOrEmpty(asset.Logo))
-                                        {
-                                            <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
-                                        }
-                                        <span class="dropdown-item-name">@asset.Name</span>
-                                        <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
-                                    </div>
-                                }
+                                <img src="@asset.Logo" alt="@asset.Symbol" class="asset-chip-logo" />
                             }
-                            
-                            @* Local Assets Section *@
-                            @if (GetAvailableLocalAssets().Any())
+                            @if (asset.IsLocal)
                             {
+                                <span class="chip-local-badge">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                                </span>
+                            }
+                        </div>
+                        <span class="asset-chip-text">@asset.Symbol?.ToUpper()</span>
+                        <button class="asset-chip-remove" @onclick="() => RemoveAsset(asset.Id)" title="Remove asset">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                        </button>
+                    </div>
+                }
+            }
+
+            @if (GetAvailableAssets().Count > 0)
+            {
+                <div class="dropdown-container" @onclick:stopPropagation="true">
+                    <button class="add-asset-btn" @onclick="ToggleDropdown">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+                        <span>Add asset</span>
+                    </button>
+                    
+                    @if (isDropdownOpen && savedAssets != null)
+                    {
+                        <div class="asset-dropdown">
+                            @if (!savedAssets.Any())
+                            {
+                                <div class="dropdown-empty">No assets available</div>
+                            }
+                            else if (GetAvailableAssets().Count > 0)
+                            {
+                                @* API Assets Section *@
                                 @if (GetAvailableApiAssets().Any())
                                 {
-                                    <div class="dropdown-divider"></div>
-                                }
-                                <div class="dropdown-section-header">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
-                                    Local Assets
-                                </div>
-                                @foreach (var asset in GetAvailableLocalAssets())
-                                {
-                                    <div class="dropdown-item local-dropdown-item" @onclick="() => AddAsset(asset)">
-                                        <div class="position-relative">
+                                    <div class="dropdown-section-header">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>
+                                        API Assets
+                                    </div>
+                                    @foreach (var asset in GetAvailableApiAssets())
+                                    {
+                                        <div class="dropdown-item" @onclick="() => AddAsset(asset)">
                                             @if (!string.IsNullOrEmpty(asset.Logo))
                                             {
                                                 <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
                                             }
-                                            <span class="dropdown-local-badge">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
-                                            </span>
+                                            <span class="dropdown-item-name">@asset.Name</span>
+                                            <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
                                         </div>
-                                        <span class="dropdown-item-name">@asset.Name</span>
-                                        <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
+                                    }
+                                }
+                                
+                                @* Local Assets Section *@
+                                @if (GetAvailableLocalAssets().Any())
+                                {
+                                    @if (GetAvailableApiAssets().Any())
+                                    {
+                                        <div class="dropdown-divider"></div>
+                                    }
+                                    <div class="dropdown-section-header">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                                        Local Assets
                                     </div>
+                                    @foreach (var asset in GetAvailableLocalAssets())
+                                    {
+                                        <div class="dropdown-item local-dropdown-item" @onclick="() => AddAsset(asset)">
+                                            <div class="position-relative">
+                                                @if (!string.IsNullOrEmpty(asset.Logo))
+                                                {
+                                                    <img src="@asset.Logo" alt="@asset.Symbol" class="dropdown-item-logo" />
+                                                }
+                                                <span class="dropdown-local-badge">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laptop-minimal-icon lucide-laptop-minimal"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                                                </span>
+                                            </div>
+                                            <span class="dropdown-item-name">@asset.Name</span>
+                                            <span class="dropdown-item-symbol">@asset.Symbol?.ToUpper()</span>
+                                        </div>
+                                    }
                                 }
                             }
-                        }
-                    </div>
-                }
-            </div>
-        }
-    </div>
-</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
 
-<div class="form-group row mb-3">
-    <div class="col-md-12 d-flex align-items-end">
         <div class="time-range-wrapper">
             <div class="segmented" role="tablist" aria-label="Time range">
                 <button type="button"
@@ -155,6 +153,68 @@
     var validAssets = allAssetData.Where(d => d.Value?.market_chart != null && d.Value.market_chart.Any()).ToList();
     var isSingleAsset = validAssets.Count == 1;
     var useCandlestick = isSingleAsset && ShouldUseCandlestick();
+    
+    @* Min/Max Statistics Cards *@
+    <div class="stats-container">
+        @{
+            var colorIndex = 0;
+            var chartColors = new[] { "#2E93FA", "#A3E635", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316" };
+        }
+        @foreach (var assetData in validAssets)
+        {
+            var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
+            var chartData = GetEnhancedChartData(assetData.Value);
+            var stats = CalculateStats(chartData);
+            var assetColor = chartColors[colorIndex % chartColors.Length];
+            colorIndex++;
+            
+            <div class="stat-card" style="--asset-color: @assetColor;">
+                <div class="stat-card-header">
+                    @if (!string.IsNullOrEmpty(asset?.Logo))
+                    {
+                        <img src="@asset.Logo" alt="@asset.Symbol" class="stat-card-logo" />
+                    }
+                    <span class="stat-card-symbol">@(asset?.Symbol?.ToUpper() ?? assetData.Key)</span>
+                    @if (asset?.IsLocal == true)
+                    {
+                        <span class="stat-card-badge">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2" ry="2" /><line x1="2" x2="22" y1="20" y2="20" /></svg>
+                        </span>
+                    }
+                </div>
+                <div class="stat-card-body">
+                    <div class="stat-item stat-min">
+                        <div class="stat-label">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trending-down-icon lucide-trending-down"><path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/></svg>
+                            <span>Min</span>
+                        </div>
+                        <div class="stat-value">$@stats.Min.ToString("N2")</div>
+                        <div class="stat-date">@stats.MinDate.ToString("MMM dd, HH:mm")</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item stat-max">
+                        <div class="stat-label">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trending-up-icon lucide-trending-up"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
+                            <span>Max</span>
+                        </div>
+                        <div class="stat-value">$@stats.Max.ToString("N2")</div>
+                        <div class="stat-date">@stats.MaxDate.ToString("MMM dd, HH:mm")</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item stat-range">
+                        <div class="stat-label">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-brackets-icon lucide-brackets"><path d="M16 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3"/><path d="M8 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"/></svg>
+                            <span>Range</span>
+                        </div>
+                        <div class="stat-value stat-range-value">$@stats.Range.ToString("N2")</div>
+                        <div class="stat-percentage @(stats.PercentageChange >= 0 ? "positive" : "negative")">
+                            @(stats.PercentageChange >= 0 ? "+" : "")@stats.PercentageChange.ToString("N2")%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
     
     <ApexChart TItem="EnhancedMarketChart" Options="GetChartOptions(useCandlestick)" @ref="chartRef">
         @* Use candlestick only for single asset with interval <= 1 month, otherwise use line charts *@
@@ -332,7 +392,26 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
         };
     }
 
-        private List<EnhancedMarketChart> GetEnhancedChartData(CoinHistoryDataResponse? data) => CoinHistoryService.EnhanceChartData(data);
+    private List<EnhancedMarketChart> GetEnhancedChartData(CoinHistoryDataResponse? data) => CoinHistoryService.EnhanceChartData(data);
+
+    private (double Min, double Max, double Range, double PercentageChange, DateTime MinDate, DateTime MaxDate) CalculateStats(List<EnhancedMarketChart> chartData)
+    {
+        if (chartData == null || !chartData.Any())
+        {
+            return (0, 0, 0, 0, DateTime.Now, DateTime.Now);
+        }
+
+        var prices = chartData.Select(d => d.Price).ToList();
+        var min = prices.Min();
+        var max = prices.Max();
+        var range = max - min;
+        var percentageChange = min != 0 ? ((max - min) / min) * 100 : 0;
+        
+        var minData = chartData.First(d => d.Price == min);
+        var maxData = chartData.First(d => d.Price == max);
+
+        return (min, max, range, percentageChange, minData.DateTime, maxData.DateTime);
+    }
 
     protected override void OnInitialized()
     {
