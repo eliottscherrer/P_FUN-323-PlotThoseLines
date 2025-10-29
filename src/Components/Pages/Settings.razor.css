@@ -1,8 +1,8 @@
 .input-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
 }
 
 .input-wrap {
@@ -12,40 +12,40 @@
 
 .left-icon {
   position: absolute;
-  left: 12px;
+  left: var(--spacing-md);
   top: 50%;
   transform: translateY(-50%);
-  color: #6b7280;
+  color: var(--color-gray-500);
   pointer-events: none;
 }
 
 .settings-input {
   width: 100%;
   height: 40px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  padding: 0 12px 0 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-gray-300);
+  padding: 0 var(--spacing-md) 0 36px;
   outline: none;
-  background: #ffffff;
-  color: #111827;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--color-white);
+  color: var(--color-black);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .settings-input:focus {
-  border-color: #6366f1;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 .btn {
   height: 40px;
-  padding: 0 16px;
-  border-radius: 8px;
+  padding: 0 var(--spacing-lg);
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
-  background: #111827;
-  color: #ffffff;
-  font-weight: 600;
+  background: var(--color-black);
+  color: var(--color-white);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.02s ease;
+  transition: background var(--transition-fast), transform 0.02s ease;
 }
 
 .btn:hover {
@@ -57,22 +57,22 @@
 }
 
 .saved-chip {
-  font-size: 12px;
-  font-weight: 700;
-  color: #065f46;
-  background: #d1fae5;
-  border-radius: 999px;
-  padding: 6px 10px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-success);
+  background: var(--color-success-lighter);
+  border-radius: var(--radius-full);
+  padding: var(--spacing-sm) var(--spacing-sm);
 }
 
 .error {
-  margin-top: 8px;
-  color: #b91c1c;
-  font-size: 14px;
+  margin-top: var(--spacing-md);
+  color: var(--text-error);
+  font-size: var(--font-size-md);
 }
 
 .paragraph {
-  margin-top: 16px;
-  font-size: 14px;
-  color: #4b5563;
+  margin-top: var(--spacing-lg);
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
 }
