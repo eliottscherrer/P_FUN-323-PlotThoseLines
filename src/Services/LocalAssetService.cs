@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
 
 namespace PlotThoseLines.Services
 {
@@ -81,17 +82,88 @@ namespace PlotThoseLines.Services
             return _assets.Where(a => a.IsLocal == true).ToList();
         }
 
+        public string GetMinimumDataInterval(LocalAsset asset)
+        {
+            if (asset?.HistoryData == null || asset.HistoryData.Count < 2)
+            {
+                return "day"; // Default to day if we can't determine
+            }
+
+            try
+            {
+                var dates = asset.HistoryData
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Date))
+                    .Select(d =>
+                    {
+                        var dateString = d.Date!.Replace("UTC+0", "").Trim();
+                        if (DateTime.TryParse(dateString, System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            out var parsedDate))
+                        {
+                            return parsedDate;
+                        }
+                        return (DateTime?)null;
+                    })
+                    .Where(d => d.HasValue)
+                    .Select(d => d!.Value)
+                    .OrderBy(d => d)
+                    .Take(10)
+                    .ToList();
+
+                if (dates.Count < 2)
+                {
+                    return "day";
+                }
+
+                // Calculate the minimum interval between consecutive dates
+                var intervals = new List<TimeSpan>();
+                for (int i = 1; i < dates.Count; i++)
+                {
+                    intervals.Add(dates[i] - dates[i - 1]);
+                }
+
+                var minInterval = intervals.Min();
+
+                // Determine the interval type
+                if (minInterval.TotalMinutes < 2)
+                {
+                    return "minute";
+                }
+                else if (minInterval.TotalHours < 2)
+                {
+                    return "hour";
+                }
+                else
+                {
+                    return "day";
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error detecting data interval for {asset.Symbol}: {ex.Message}");
+                return "day";
+            }
+        }
+
         public async Task<bool> AddAssetAsync(LocalAsset asset)
         {
-            // Check if asset already exists
-            if (_assets.Any(a => a.Id?.Equals(asset.Id, StringComparison.OrdinalIgnoreCase) == true))
+            try
+            {
+                if (asset == null || string.IsNullOrWhiteSpace(asset.Id))
+                    return false;
+
+                // Check if asset already exists
+                if (_assets.Any(a => a.Id?.Equals(asset.Id, StringComparison.OrdinalIgnoreCase) == true))
+                    return false;
+
+                _assets.Add(asset);
+                await SaveAssetsAsync();
+                return true;
+            }
+            catch (Exception ex)
             {
                 return false;
             }
-
-            _assets.Add(asset);
-            await SaveAssetsAsync();
-            return true;
         }
 
         public async Task<bool> RemoveAssetAsync(string assetId)
@@ -110,19 +182,65 @@ namespace PlotThoseLines.Services
 
         private void LoadAssets()
         {
-            if (File.Exists(_assetsFilePath))
+            try
             {
-                var json = File.ReadAllText(_assetsFilePath);
-                var assets = JsonSerializer.Deserialize<List<LocalAsset>>(json);
-                _assets = assets ?? new List<LocalAsset>();
+                if (File.Exists(_assetsFilePath))
+                {
+                    var json = File.ReadAllText(_assetsFilePath);
+                    
+                    if (string.IsNullOrWhiteSpace(json))
+                    {
+                        _assets = new List<LocalAsset>();
+                        return;
+                    }
+
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        ReadCommentHandling = JsonCommentHandling.Skip,
+                        AllowTrailingCommas = true
+                    };
+
+                    var assets = JsonSerializer.Deserialize<List<LocalAsset>>(json, options);
+                    _assets = assets ?? new List<LocalAsset>();
+                    
+                    Debug.WriteLine($"Loaded {_assets.Count} assets from file");
+                    
+                    // Validate assets
+                    var invalidAssets = _assets.Where(a => string.IsNullOrWhiteSpace(a.Id)).ToList();
+                }
+                else
+                {
+                    _assets = new List<LocalAsset>();
+                }
+            }
+            catch (JsonException jsonEx)
+            {
+                _assets = new List<LocalAsset>();
+            }
+            catch (Exception ex)
+            {
+                _assets = new List<LocalAsset>();
             }
         }
 
         private async Task SaveAssetsAsync()
         {
-            var json = JsonSerializer.Serialize(_assets, new JsonSerializerOptions { WriteIndented = true });
+            try
+            {
+                var options = new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+                };
 
-            await File.WriteAllTextAsync(_assetsFilePath, json);
+                var json = JsonSerializer.Serialize(_assets, options);
+                await File.WriteAllTextAsync(_assetsFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                throw; // Re-throw to notify caller of save failure
+            }
         }
     }
 
