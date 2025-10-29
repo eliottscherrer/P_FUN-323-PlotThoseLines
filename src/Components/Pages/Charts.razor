@@ -1,5 +1,6 @@
 ﻿@using Microsoft.AspNetCore.Components.Forms;
 @using PlotThoseLines.Services;
+@using System.Text.Json;
 @inject LocalAssetService LocalAssetService
 @inject CoinHistoryService CoinHistoryService
 @inject ChartsStateService StateService
@@ -117,12 +118,14 @@
                     class='@GetSegmentClass("1d")'
                     role="tab"
                     aria-selected='@IsSelected("1d")'
+                    disabled="@IsIntervalDisabled("1d")"
                     @onclick='() => SelectedRange = "1d"'>1d</button>
 
                 <button type="button"
                     class='@GetSegmentClass("7d")'
                     role="tab"
                     aria-selected='@IsSelected("7d")'
+                    disabled="@IsIntervalDisabled("7d")"
                     @onclick='() => SelectedRange = "7d"'>7d</button>
 
                 <button type="button"
@@ -168,10 +171,11 @@
 {
     var validAssets = allAssetData.Where(d => d.Value?.market_chart != null && d.Value.market_chart.Any()).ToList();
     var isSingleAsset = validAssets.Count == 1;
+    var useCandlestick = isSingleAsset && ShouldUseCandlestick();
     
-    <ApexChart TItem="EnhancedMarketChart" Options="GetChartOptions(isSingleAsset)" @ref="chartRef">
-        @* Switch to line charts whenever we have multiple assets on the chart to avoid overlap of colors and imporve clarity *@
-        @if (isSingleAsset)
+    <ApexChart TItem="EnhancedMarketChart" Options="GetChartOptions(useCandlestick)" @ref="chartRef">
+        @* Use candlestick only for single asset with interval <= 1 month, otherwise use line charts *@
+        @if (useCandlestick)
         {
             var assetData = validAssets.First();
             var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
@@ -203,10 +207,10 @@
         }
     </ApexChart>
 }
-else if (allAssetData.Any())
+else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
 {
     <div class="alert alert-info">
-        <strong>No chart data available.</strong> The dataset is empty.
+        <strong>No chart data available.</strong> The dataset contains no valid historical data to display.
     </div>
 }
 
@@ -221,49 +225,59 @@ else if (allAssetData.Any())
 
 @if (errorMessage != null)
 {
-    <div class="alert alert-danger mt-3">
-        <strong>Error:</strong> @errorMessage
+    var alertClass = errorMessage.StartsWith("Warning:") ? "alert-warning" : "alert-danger";
+    var alertTitle = errorMessage.StartsWith("Warning:") ? "Warning" : "Error";
+    
+    <div class="alert @alertClass mt-3">
+        <strong>@alertTitle:</strong> @errorMessage
     </div>
 }
 
-@code {
-    private string interval = "day";
-    private int dataLength = 30;
-    private string vsCurrency = "usd";
-    private Dictionary<string, CoinHistoryDataResponse?> allAssetData = new();
-    private bool isLoading = false;
-    private string? errorMessage;
-    private List<LocalAsset>? savedAssets;
-    private List<LocalAsset> selectedAssets = new();
-    private string selectedAssetId = "";
-    private ApexChart<EnhancedMarketChart>? chartRef;
-    private bool isDropdownOpen = false;
-    private string selectedRange = "1m";
-    private string SelectedRange
-    {
-        get => selectedRange;
-        set
+    @code {
+        private string interval = "day";
+        private int dataLength = 30;
+        private string vsCurrency = "usd";
+        private Dictionary<string, CoinHistoryDataResponse?> allAssetData = new();
+        private bool isLoading = false;
+        private string? errorMessage;
+        private List<LocalAsset>? savedAssets;
+        private List<LocalAsset> selectedAssets = new();
+        private string selectedAssetId = "";
+        private ApexChart<EnhancedMarketChart>? chartRef;
+        private bool isDropdownOpen = false;
+        private string selectedRange = "1m";
+        private string SelectedRange
         {
-            if (selectedRange == value) return;
-            selectedRange = value;
-            ApplyPresetRange(value);
-            SaveStateToService();
-            StateHasChanged();
+            get => selectedRange;
+            set
+            {
+                if (selectedRange == value) return;
+                selectedRange = value;
+                ApplyPresetRange(value);
+                SaveStateToService();
+                StateHasChanged();
+            }
         }
-    }
 
-    public void Dispose()
-    {
-        SaveStateToService();
-    }
+        public void Dispose()
+        {
+            SaveStateToService();
+        }
 
-    private ApexChartOptions<EnhancedMarketChart> GetChartOptions(bool isSingleAsset)
-    {
-        return new ApexChartOptions<EnhancedMarketChart>
+        private bool ShouldUseCandlestick()
+        {
+            // Only use candlestick for intervals <= 1 month
+            // Don't use candlestick for 1y and All
+            return selectedRange == "1d" || selectedRange == "7d" || selectedRange == "1m";
+        }
+
+        private ApexChartOptions<EnhancedMarketChart> GetChartOptions(bool useCandlestick)
+        {
+            return new ApexChartOptions<EnhancedMarketChart>
         {
             Chart = new Chart
             {
-                Type = isSingleAsset ? ChartType.Candlestick : ChartType.Line, // Switch to line charts whenever we have multiple assets on the chart to avoid overlap of colors and imporve clarity
+                Type = useCandlestick ? ChartType.Candlestick : ChartType.Line,
                 Zoom = new Zoom { Enabled = true },
                 Toolbar = new Toolbar { Show = true },
                 ForeColor = "#334155"
@@ -408,6 +422,34 @@ else if (allAssetData.Any())
     private bool IsSelected(string range) => SelectedRange == range;
     private string GetSegmentClass(string range) => IsSelected(range) ? "segment selected" : "segment";
 
+    // Made to avoid selecting intervals with too few data points
+    private bool IsIntervalDisabled(string range)
+    {
+        var localAssets = selectedAssets.Where(a => a.IsLocal).ToList();
+        if (!localAssets.Any())
+        {
+            return false;
+        }
+
+        foreach (var asset in localAssets)
+        {
+            var minInterval = LocalAssetService.GetMinimumDataInterval(asset);
+            
+            // If data is daily, disable hourly intervals (1d)
+            if (minInterval == "day" && range == "1d")
+            {
+                return true;
+            }
+            // If data is daily, also disable 7d if there are fewer than 7 data points
+            if (minInterval == "day" && range == "7d" && asset.HistoryData != null && asset.HistoryData.Count < 7)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void LoadSavedAssets()
     {
         try
@@ -482,6 +524,7 @@ else if (allAssetData.Any())
         isLoading = true;
         errorMessage = null;
         allAssetData.Clear();
+        StateHasChanged(); // Update UI to show loading state
 
         try
         {
@@ -493,29 +536,67 @@ else if (allAssetData.Any())
                 vsCurrency);
 
             // Check if any data was fetched successfully
-            if (!allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_chart.Any()))
+            var validAssets = allAssetData
+                .Where(d => d.Value?.market_chart != null && d.Value.market_chart.Any())
+                .ToList();
+
+            if (!validAssets.Any())
             {
-                errorMessage = "No data could be fetched for any of the selected assets.";
+                var failedAssets = selectedAssets
+                    .Select(a => a.Symbol?.ToUpper() ?? a.Name ?? "Unknown")
+                    .ToList();
+                
+                errorMessage = $"Warning: Limited or no historical data available for: {string.Join(", ", failedAssets)}. " +
+                              "Displaying with placeholder values. This may be due to missing data, network issues, or the asset being newly added.";
+                
+                // Try to update chart anyway
+                if (chartRef is not null)
+                {
+                    try
+                    {
+                        await chartRef.UpdateOptionsAsync(true, true, false, null);
+                    }
+                    catch (Exception chartEx)
+                    {
+                    }
+                }
             }
-            else if (chartRef is not null)
+            else
             {
-                await chartRef.UpdateOptionsAsync(true, true, false, null);
+                if (validAssets.Count < selectedAssets.Count)
+                {
+                    var failedCount = selectedAssets.Count - validAssets.Count;
+                    errorMessage = $"Warning: {failedCount} asset(s) could not be loaded due to missing or invalid data. " +
+                                  $"Displaying {validAssets.Count} asset(s) successfully.";
+                }
+
+                if (chartRef is not null)
+                {
+                    await chartRef.UpdateOptionsAsync(true, true, false, null);
+                }
             }
+        }
+        catch (HttpRequestException httpEx)
+        {
+            errorMessage = $"Network error: {httpEx.Message}. Please check your internet connection and try again.";
+        }
+        catch (JsonException jsonEx)
+        {
+            errorMessage = $"Data format error: {jsonEx.Message}. The data from the source may be corrupted or in an unexpected format.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "Request timed out. The server took too long to respond. Please try again.";
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error: {ex.Message}";
-            Console.WriteLine($"API Request Error: {ex}");
-
-            if (ex.Message.Contains("JSON") || ex.Message.Contains("convert"))
-            {
-                errorMessage += " (Data format issue - check the console for more details)";
-            }
+            errorMessage = $"Unexpected error: {ex.Message}";
         }
         finally
         {
             isLoading = false;
             SaveStateToService();
+            StateHasChanged(); // Ensure UI updates even if there's an error
         }
     }
 

@@ -37,6 +37,12 @@
   background-color: rgba(71, 85, 105, 0.05);
 }
 
+.segmented button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .segmented button:focus-visible {
   outline: 2px solid #4a90e2;
   outline-offset: 2px;
