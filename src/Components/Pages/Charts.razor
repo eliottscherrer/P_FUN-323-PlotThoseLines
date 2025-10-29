@@ -290,7 +290,12 @@ else if (allAssetData.Any())
             new YAxis
             {
                 Title = new AxisTitle { Text = "Price (USD)" },
-                Labels = new YAxisLabels()
+                Labels = new YAxisLabels
+                {
+                    Formatter = @"function (value) {
+                                     return '$' + Number(value).toFixed(2);
+                                 }"
+                }
             }
         },
         Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 },
