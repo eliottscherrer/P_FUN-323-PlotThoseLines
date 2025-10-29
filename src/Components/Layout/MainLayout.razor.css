@@ -10,6 +10,8 @@ main {
 
 .sidebar {
   background-image: var(--gradient-sidebar);
+  border-right: 2px solid var(--border-light);
+  height: 100%;
 }
 
 .top-row {
