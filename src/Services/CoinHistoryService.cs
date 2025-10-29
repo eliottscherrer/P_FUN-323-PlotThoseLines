@@ -1,16 +1,79 @@
 using Microsoft.AspNetCore.WebUtilities;
 using PlotThoseLines.Extensions;
 using System.Net.Http.Json;
+using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PlotThoseLines.Services
 {
+    // Custom converter to handle invalid double values from API
+    public class SafeDoubleConverter : JsonConverter<double>
+    {
+        public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return 0.0;
+            }
+
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                var stringValue = reader.GetString();
+                if (string.IsNullOrWhiteSpace(stringValue) || 
+                    stringValue.Equals("null", StringComparison.OrdinalIgnoreCase) ||
+                    stringValue.Equals("nan", StringComparison.OrdinalIgnoreCase) ||
+                    stringValue.Equals("infinity", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 0.0;
+                }
+
+                if (double.TryParse(stringValue, out var result))
+                {
+                    return double.IsNaN(result) || double.IsInfinity(result) ? 0.0 : result;
+                }
+
+                return 0.0;
+            }
+
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                var value = reader.GetDouble();
+                return double.IsNaN(value) || double.IsInfinity(value) ? 0.0 : value;
+            }
+
+            // For any other type, return 0
+            return 0.0;
+        }
+
+        public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                writer.WriteNumberValue(0.0);
+            }
+            else
+            {
+                writer.WriteNumberValue(value);
+            }
+        }
+    }
+
     public class CoinHistoryService
     {
         private readonly HttpClient _httpClient;
+        private readonly JsonSerializerOptions _jsonOptions;
 
         public CoinHistoryService(HttpClient httpClient)
         {
             _httpClient = httpClient;
+            
+            _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                Converters = { new SafeDoubleConverter() },
+                NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals
+            };
         }
 
         public async Task<Dictionary<string, CoinHistoryDataResponse?>> FetchHistoryDataAsync(
@@ -29,10 +92,15 @@ namespace PlotThoseLines.Services
                 try
                 {
                     // Check if this is a local asset
-                    if (asset.IsLocal && asset.HistoryData != null && asset.HistoryData.Any())
+                    if (asset.IsLocal)
                     {
+                        if (asset.HistoryData == null || !asset.HistoryData.Any())
+                        {
+                            return (asset.Id!, (CoinHistoryDataResponse?)null);
+                        }
+
                         // Convert local asset data to API format on a background thread
-                        var localData = await Task.Run(() => ConvertLocalAssetToApiFormat(asset));
+                        var localData = await Task.Run(() => ConvertLocalAssetToApiFormat(asset, interval, dataLength)).ConfigureAwait(false);
                         return (asset.Id!, localData);
                     }
 
@@ -44,7 +112,13 @@ namespace PlotThoseLines.Services
                         { "vs_currency", vsCurrency }
                     };
                     var url = QueryHelpers.AddQueryString($"history/coins/{asset.Id}", queryParams);
-                    var response = await _httpClient.GetFromJsonAsync<ApiResponse>(url);
+                    
+                    // Use custom JSON options to handle invalid values
+                    var httpResponse = await _httpClient.GetAsync(url).ConfigureAwait(false);
+                    httpResponse.EnsureSuccessStatusCode();
+                    
+                    var stream = await httpResponse.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                    var response = await JsonSerializer.DeserializeAsync<ApiResponse>(stream, _jsonOptions).ConfigureAwait(false);
 
                     if (response?.status?.code == 0 && response?.data != null)
                     {
@@ -53,9 +127,38 @@ namespace PlotThoseLines.Services
 
                     return (asset.Id!, (CoinHistoryDataResponse?)null);
                 }
+                catch (HttpRequestException httpEx)
+                {
+                    Debug.WriteLine($"Network error fetching data for {asset.Symbol}: {httpEx.Message}");
+                    return (asset.Id!, (CoinHistoryDataResponse?)null);
+                }
+                catch (JsonException jsonEx)
+                {
+                    Debug.WriteLine($"JSON parsing error for {asset.Symbol}: {jsonEx.Message}");
+                    Debug.WriteLine($"This usually means the API returned invalid data. Creating placeholder data for {asset.Symbol}");
+                    
+                    // Create minimal placeholder data instead of returning null
+                    return (asset.Id!, new CoinHistoryDataResponse
+                    {
+                        id = asset.Id,
+                        name = asset.Name,
+                        symbol = asset.Symbol,
+                        logo = asset.Logo,
+                        vs_currency = vsCurrency,
+                        market_chart = new[]
+                        {
+                            new MarketChart
+                            {
+                                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                                price = 0.01,
+                                market_cap = 0.0,
+                                vol_spot_24h = 0.0
+                            }
+                        }
+                    });
+                }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error fetching data for {asset.Symbol}: {ex.Message}");
                     return (asset.Id!, (CoinHistoryDataResponse?)null);
                 }
             });
@@ -73,66 +176,112 @@ namespace PlotThoseLines.Services
             return result;
         }
 
-        private CoinHistoryDataResponse ConvertLocalAssetToApiFormat(LocalAsset asset)
+        private CoinHistoryDataResponse ConvertLocalAssetToApiFormat(LocalAsset asset, string interval, int dataLength)
         {
+            var emptyResponse = new CoinHistoryDataResponse
+            {
+                id = asset.Id,
+                name = asset.Name,
+                symbol = asset.Symbol,
+                logo = asset.Logo,
+                market_chart = Array.Empty<MarketChart>(),
+                vs_currency = "usd"
+            };
+
             if (asset.HistoryData == null || !asset.HistoryData.Any())
             {
-                return new CoinHistoryDataResponse
-                {
-                    id = asset.Id,
-                    name = asset.Name,
-                    symbol = asset.Symbol,
-                    logo = asset.Logo,
-                    market_chart = Array.Empty<MarketChart>()
-                };
+                Debug.WriteLine($"No history data available for {asset.Symbol}");
+                return emptyResponse;
             }
 
             try
             {
-                var marketChartData = asset.HistoryData
-                    .AsParallel() // Use parallel processing for large datasets
-                    .Where(data => data.Price.HasValue) // Filter out entries with null prices
-                    .Select(data =>
+                Debug.WriteLine($"Converting {asset.HistoryData.Count} local data points for {asset.Symbol}...");
+
+                // Process data sequentially to avoid UI freezing
+                var marketChartData = new List<MarketChart>();
+                int skippedCount = 0;
+                int processedCount = 0;
+
+                foreach (var data in asset.HistoryData)
+                {
+                    try
                     {
-                        // Parse the date string to Unix timestamp
-                        long timestamp = 0;
-                        try
+                        if (!data.Price.HasValue || data.Price.Value <= 0)
                         {
-                            if (!string.IsNullOrEmpty(data.Date))
-                            {
-                                // Try to parse the date more efficiently
-                                if (DateTime.TryParse(data.Date, out var parsedDate))
-                                {
-                                    timestamp = new DateTimeOffset(parsedDate).ToUnixTimeMilliseconds();
-                                }
-                                else
-                                {
-                                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                                }
-                            }
-                            else
-                            {
-                                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error parsing date '{data.Date}': {ex.Message}");
-                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            skippedCount++;
+                            continue;
                         }
 
-                        return new MarketChart
+                        // Parse the date string to Unix timestamp
+                        long timestamp;
+                        if (string.IsNullOrWhiteSpace(data.Date))
+                        {
+                            Debug.WriteLine($"Skipping entry with null/empty date for {asset.Symbol}");
+                            skippedCount++;
+                            continue;
+                        }
+
+                        // Handle date formats like "2025-10-07 00:00:00 UTC+0"
+                        var dateString = data.Date.Replace("UTC+0", "").Trim();
+                        
+                        if (DateTime.TryParse(dateString, System.Globalization.CultureInfo.InvariantCulture, 
+                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, 
+                            out var parsedDate))
+                        {
+                            timestamp = new DateTimeOffset(parsedDate, TimeSpan.Zero).ToUnixTimeMilliseconds();
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"Failed to parse date '{data.Date}' for {asset.Symbol}, skipping entry");
+                            skippedCount++;
+                            continue;
+                        }
+
+                        var marketChart = new MarketChart
                         {
                             timestamp = timestamp,
-                            price = data.Price.GetValueOrDefault(0.0),
-                            market_cap = data.Market_cap.GetValueOrDefault(0.0),
-                            vol_spot_24h = data.Volume.GetValueOrDefault(0.0)
+                            price = data.Price.Value,
+                            market_cap = data.Market_cap ?? 0.0,
+                            vol_spot_24h = data.Volume ?? 0.0
                         };
-                    })
-                    .OrderBy(m => m.timestamp)
-                    .ToArray();
 
-                Console.WriteLine($"Converted {marketChartData.Length} data points for local asset {asset.Symbol}");
+                        marketChartData.Add(marketChart);
+                        processedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error processing data point for {asset.Symbol}: {ex.Message}");
+                        skippedCount++;
+                        continue;
+                    }
+                }
+
+                if (!marketChartData.Any())
+                {
+                    // Create a single placeholder data point to avoid empty dataset
+                    // This allows the chart to display something rather than failing completely
+                    var now = DateTimeOffset.UtcNow;
+                    marketChartData.Add(new MarketChart
+                    {
+                        timestamp = now.ToUnixTimeMilliseconds(),
+                        price = 0.01,
+                        market_cap = 0.0,
+                        vol_spot_24h = 0.0
+                    });
+                }
+
+                var sortedData = marketChartData.OrderByDescending(m => m.timestamp).ToArray();
+
+               MarketChart[] filteredData;
+                if (dataLength > 0 && sortedData.Length > dataLength)
+                {
+                    filteredData = sortedData.Take(dataLength).OrderBy(m => m.timestamp).ToArray();
+                }
+                else
+                {
+                    filteredData = sortedData.OrderBy(m => m.timestamp).ToArray();
+                }
 
                 return new CoinHistoryDataResponse
                 {
@@ -140,78 +289,143 @@ namespace PlotThoseLines.Services
                     name = asset.Name,
                     symbol = asset.Symbol,
                     logo = asset.Logo,
-                    market_chart = marketChartData,
+                    market_chart = filteredData,
                     vs_currency = "usd"
                 };
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error converting local asset data for {asset.Symbol}: {ex.Message}");
-                return new CoinHistoryDataResponse
-                {
-                    id = asset.Id,
-                    name = asset.Name,
-                    symbol = asset.Symbol,
-                    logo = asset.Logo,
-                    market_chart = Array.Empty<MarketChart>(),
-                    vs_currency = "usd"
-                };
+                return emptyResponse;
             }
         }
 
         public List<EnhancedMarketChart> EnhanceChartData(CoinHistoryDataResponse? data)
         {
             if (data?.market_chart == null || !data.market_chart.Any())
-                return new List<EnhancedMarketChart>();
-
-            var rng = new Random();
-            var points = data.market_chart.ToArray();
-            var result = new List<EnhancedMarketChart>(points.Length);
-            double previousClose = points.First().price;
-
-            // Constants for data enhancement
-            const double anchorWeight = 0.7; // Make the "Close" stay not too different from the base price
-            const double maxJumpPct = 0.25;
-            const double noisePct = 0.003;
-            const double minWickPct = 0.002;
-            const double maxWickPct = 0.06;
-
-            result = points.Select(entry =>
             {
-                var basePrice = entry.price;
-                double open = previousClose;
+                return new List<EnhancedMarketChart>();
+            }
 
-                double blended = anchorWeight * basePrice + (1 - anchorWeight) * open;
-                double noise = (rng.NextDouble() - 0.5) * 2 * noisePct * blended;
-                double closeUnclamped = blended + noise;
-
-                double minClose = open * (1 - maxJumpPct);
-                double maxClose = open * (1 + maxJumpPct);
-                double close = Math.Clamp(closeUnclamped, minClose, maxClose);
-
-                double bodyPct = Math.Abs(close - open) / open;
-                double wickPct = bodyPct * 0.6 + 0.003 + (rng.NextDouble() - 0.5) * 0.003;
-                wickPct = Math.Clamp(wickPct, minWickPct, maxWickPct);
-
-                double high = Math.Max(open, close) * (1.0 + wickPct);
-                double low = Math.Min(open, close) * (1.0 - wickPct);
-
-                previousClose = close;
-
-                return new EnhancedMarketChart
+            try
+            {
+                var rng = new Random();
+                var points = data.market_chart.Where(p => p.price > 0).ToArray();
+                
+                if (!points.Any())
                 {
-                    DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
-                    Price = basePrice,
-                    Open = Math.Round(open, 2),
-                    Close = Math.Round(close, 2),
-                    Low = Math.Round(low, 2),
-                    High = Math.Round(high, 2),
-                    MarketCap = entry.market_cap,
-                    Volume = entry.vol_spot_24h
-                };
-            }).ToList();
+                    return new List<EnhancedMarketChart>();
+                }
 
-            return result;
+                var result = new List<EnhancedMarketChart>(points.Length);
+                double previousClose = points.First().price;
+
+                // Constants for data enhancement
+                const double anchorWeight = 0.7; // Make the "Close" stay not too different from the base price
+                const double maxJumpPct = 0.25;
+                const double noisePct = 0.003;
+                const double minWickPct = 0.002;
+                const double maxWickPct = 0.06;
+
+                foreach (var entry in points)
+                {
+                    try
+                    {
+                        var basePrice = entry.price;
+                        
+                        if (basePrice <= 0 || double.IsNaN(basePrice) || double.IsInfinity(basePrice))
+                        {
+                            basePrice = previousClose > 0 ? previousClose : 1.0; // Fallback to previous or 1.0
+                        }
+
+                        double open = previousClose > 0 ? previousClose : basePrice;
+
+                        double blended = anchorWeight * basePrice + (1 - anchorWeight) * open;
+                        double noise = (rng.NextDouble() - 0.5) * 2 * noisePct * blended;
+                        double closeUnclamped = blended + noise;
+
+                        double minClose = open * (1 - maxJumpPct);
+                        double maxClose = open * (1 + maxJumpPct);
+                        double close = Math.Clamp(closeUnclamped, minClose, maxClose);
+
+                        double bodyPct = Math.Abs(close - open) / open;
+                        double wickPct = bodyPct * 0.6 + 0.003 + (rng.NextDouble() - 0.5) * 0.003;
+                        wickPct = Math.Clamp(wickPct, minWickPct, maxWickPct);
+
+                        double high = Math.Max(open, close) * (1.0 + wickPct);
+                        double low = Math.Min(open, close) * (1.0 - wickPct);
+
+                        previousClose = close;
+
+                        result.Add(new EnhancedMarketChart
+                        {
+                            DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
+                            Price = basePrice,
+                            Open = Math.Round(open, 2),
+                            Close = Math.Round(close, 2),
+                            Low = Math.Round(low, 2),
+                            High = Math.Round(high, 2),
+                            MarketCap = double.IsNaN(entry.market_cap) || double.IsInfinity(entry.market_cap) ? 0.0 : entry.market_cap,
+                            Volume = double.IsNaN(entry.vol_spot_24h) || double.IsInfinity(entry.vol_spot_24h) ? 0.0 : entry.vol_spot_24h
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        try
+                        {
+                            result.Add(new EnhancedMarketChart
+                            {
+                                DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
+                                Price = previousClose > 0 ? previousClose : 1.0,
+                                Open = previousClose > 0 ? previousClose : 1.0,
+                                Close = previousClose > 0 ? previousClose : 1.0,
+                                Low = previousClose > 0 ? previousClose * 0.99 : 0.99,
+                                High = previousClose > 0 ? previousClose * 1.01 : 1.01,
+                                MarketCap = 0.0,
+                                Volume = 0.0
+                            });
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+                    }
+                }
+
+                if (!result.Any())
+                {
+                    Debug.WriteLine("No enhanced data points created, returning minimal placeholder");
+                    result.Add(new EnhancedMarketChart
+                    {
+                        DateTime = DateTime.UtcNow,
+                        Price = 1.0,
+                        Open = 1.0,
+                        Close = 1.0,
+                        Low = 0.99,
+                        High = 1.01,
+                        MarketCap = 0.0,
+                        Volume = 0.0
+                    });
+                }
+                
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return new List<EnhancedMarketChart>
+                {
+                    new EnhancedMarketChart
+                    {
+                        DateTime = DateTime.UtcNow,
+                        Price = 1.0,
+                        Open = 1.0,
+                        Close = 1.0,
+                        Low = 0.99,
+                        High = 1.01,
+                        MarketCap = 0.0,
+                        Volume = 0.0
+                    }
+                };
+            }
         }
     }
 
@@ -235,9 +449,15 @@ namespace PlotThoseLines.Services
 
     public class MarketChart
     {
+        [JsonConverter(typeof(SafeDoubleConverter))]
         public double market_cap { get; set; }
+        
+        [JsonConverter(typeof(SafeDoubleConverter))]
         public double price { get; set; }
+        
         public long timestamp { get; set; }
+        
+        [JsonConverter(typeof(SafeDoubleConverter))]
         public double vol_spot_24h { get; set; }
     }
 
