@@ -163,17 +163,11 @@ namespace PlotThoseLines.Services
                 }
             });
 
-            var results = await Task.WhenAll(fetchTasks);
+            var results = await Task.WhenAll(fetchTasks).ConfigureAwait(false);
 
-            foreach (var (assetId, data) in results)
-            {
-                if (!string.IsNullOrEmpty(assetId))
-                {
-                    result[assetId] = data;
-                }
-            }
-
-            return result;
+            return results
+                .Where(r => !string.IsNullOrEmpty(r.Item1) && r.Item2 != null)
+                .ToDictionary(r => r.Item1!, r => r.Item2);
         }
 
         private CoinHistoryDataResponse ConvertLocalAssetToApiFormat(LocalAsset asset, string interval, int dataLength)
@@ -198,64 +192,44 @@ namespace PlotThoseLines.Services
             {
                 Debug.WriteLine($"Converting {asset.HistoryData.Count} local data points for {asset.Symbol}...");
 
-                // Process data sequentially to avoid UI freezing
-                var marketChartData = new List<MarketChart>();
-                int skippedCount = 0;
-                int processedCount = 0;
-
-                foreach (var data in asset.HistoryData)
-                {
-                    try
+                var marketChartData = asset.HistoryData
+                    .Select(data =>
                     {
-                        if (!data.Price.HasValue || data.Price.Value <= 0)
+                        try
                         {
-                            skippedCount++;
-                            continue;
-                        }
+                            if (!data.Price.HasValue || data.Price.Value <= 0 || string.IsNullOrWhiteSpace(data.Date))
+                            {
+                                return null;
+                            }
 
-                        // Parse the date string to Unix timestamp
-                        long timestamp;
-                        if (string.IsNullOrWhiteSpace(data.Date))
-                        {
-                            Debug.WriteLine($"Skipping entry with null/empty date for {asset.Symbol}");
-                            skippedCount++;
-                            continue;
+                            var dateString = data.Date.Replace("UTC+0", "").Trim();
+                            if (DateTime.TryParse(dateString, System.Globalization.CultureInfo.InvariantCulture,
+                                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                                out var parsedDate))
+                            {
+                                return new MarketChart
+                                {
+                                    timestamp = new DateTimeOffset(parsedDate, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                                    price = data.Price.Value,
+                                    market_cap = data.Market_cap ?? 0.0,
+                                    vol_spot_24h = data.Volume ?? 0.0
+                                };
+                            }
+                            else
+                            {
+                                Debug.WriteLine($"Failed to parse date '{data.Date}' for {asset.Symbol}, skipping entry");
+                                return null;
+                            }
                         }
-
-                        // Handle date formats like "2025-10-07 00:00:00 UTC+0"
-                        var dateString = data.Date.Replace("UTC+0", "").Trim();
-                        
-                        if (DateTime.TryParse(dateString, System.Globalization.CultureInfo.InvariantCulture, 
-                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, 
-                            out var parsedDate))
+                        catch (Exception ex)
                         {
-                            timestamp = new DateTimeOffset(parsedDate, TimeSpan.Zero).ToUnixTimeMilliseconds();
+                            Debug.WriteLine($"Error processing data point for {asset.Symbol}: {ex.Message}");
+                            return null;
                         }
-                        else
-                        {
-                            Debug.WriteLine($"Failed to parse date '{data.Date}' for {asset.Symbol}, skipping entry");
-                            skippedCount++;
-                            continue;
-                        }
-
-                        var marketChart = new MarketChart
-                        {
-                            timestamp = timestamp,
-                            price = data.Price.Value,
-                            market_cap = data.Market_cap ?? 0.0,
-                            vol_spot_24h = data.Volume ?? 0.0
-                        };
-
-                        marketChartData.Add(marketChart);
-                        processedCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Error processing data point for {asset.Symbol}: {ex.Message}");
-                        skippedCount++;
-                        continue;
-                    }
-                }
+                    })
+                    .Where(mc => mc != null)
+                    .Select(mc => mc!)
+                    .ToList();
 
                 if (!marketChartData.Any())
                 {
@@ -316,22 +290,19 @@ namespace PlotThoseLines.Services
                     return new List<EnhancedMarketChart>();
                 }
 
-                var result = new List<EnhancedMarketChart>(points.Length);
-                double previousClose = points.First().price;
+                double previousClose = 0;
+                const double anchorWeight = 0.4;
+                const double noisePct = 0.015;
+                const double maxJumpPct = 0.05;
+                const double minWickPct = 0.001;
+                const double maxWickPct = 0.02;
 
-                // Constants for data enhancement
-                const double anchorWeight = 0.7; // Make the "Close" stay not too different from the base price
-                const double maxJumpPct = 0.25;
-                const double noisePct = 0.003;
-                const double minWickPct = 0.002;
-                const double maxWickPct = 0.06;
-
-                foreach (var entry in points)
+                var result = points.Select(entry =>
                 {
                     try
                     {
                         var basePrice = entry.price;
-                        
+
                         if (basePrice <= 0 || double.IsNaN(basePrice) || double.IsInfinity(basePrice))
                         {
                             basePrice = previousClose > 0 ? previousClose : 1.0; // Fallback to previous or 1.0
@@ -356,7 +327,7 @@ namespace PlotThoseLines.Services
 
                         previousClose = close;
 
-                        result.Add(new EnhancedMarketChart
+                        return new EnhancedMarketChart
                         {
                             DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
                             Price = basePrice,
@@ -366,13 +337,13 @@ namespace PlotThoseLines.Services
                             High = Math.Round(high, 2),
                             MarketCap = double.IsNaN(entry.market_cap) || double.IsInfinity(entry.market_cap) ? 0.0 : entry.market_cap,
                             Volume = double.IsNaN(entry.vol_spot_24h) || double.IsInfinity(entry.vol_spot_24h) ? 0.0 : entry.vol_spot_24h
-                        });
+                        };
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
                         try
                         {
-                            result.Add(new EnhancedMarketChart
+                            return new EnhancedMarketChart
                             {
                                 DateTime = entry.timestamp.ToLocalDateTimeFromUnixMs(),
                                 Price = previousClose > 0 ? previousClose : 1.0,
@@ -382,14 +353,17 @@ namespace PlotThoseLines.Services
                                 High = previousClose > 0 ? previousClose * 1.01 : 1.01,
                                 MarketCap = 0.0,
                                 Volume = 0.0
-                            });
+                            };
                         }
                         catch
                         {
-                            continue;
+                            return null;
                         }
                     }
-                }
+                })
+                .Where(x => x != null)
+                .Select(x => x!)
+                .ToList();
 
                 if (!result.Any())
                 {
