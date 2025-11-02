@@ -115,14 +115,11 @@ namespace PlotThoseLines.Services
                     return "day";
                 }
 
-                // Calculate the minimum interval between consecutive dates
-                var intervals = new List<TimeSpan>();
-                for (int i = 1; i < dates.Count; i++)
-                {
-                    intervals.Add(dates[i] - dates[i - 1]);
-                }
-
-                var minInterval = intervals.Min();
+                // Calculate the minimum interval between consecutive dates (LINQ, no for-loop)
+                var minInterval = dates
+                    .Skip(1)
+                    .Zip(dates, (current, previous) => current - previous)
+                    .Min();
 
                 // Determine the interval type
                 if (minInterval.TotalMinutes < 2)
