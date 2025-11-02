@@ -7,8 +7,8 @@ Application .NET MAUI + Blazor Hybride pour visualiser des séries temporelles (
 2. Définir une clé API dans l'onglet Settings.
     - Vous pouvez obtenir une clé API gratuite sur [TokenInsight](https://tokeninsight.com/en/api).
 3. Importer des assets (JSON local ou via API) puis visualiser dans l’onglet Charts.
+    - Si vous voulez importer des données locales, il y en a dans le dossier [data](data) pour tester.
 4. Explorer les fonctionnalités de l'application et personnaliser les visualisations.
-   - Si vous voulez importer des données locales, il y en a dans le dossier [data](data) pour tester.
 
 ## 📄 Documentation
 - Rapport: [doc/Report.md](doc/Report.md)
