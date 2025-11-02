@@ -549,20 +549,12 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
             return false;
         }
 
-        foreach (var asset in localAssets)
+        if (localAssets.Any(asset =>
+            LocalAssetService.GetMinimumDataInterval(asset) == "day" &&
+            (range == "1d" || (range == "7d" && (asset.HistoryData?.Count ?? 0) < 7))
+        ))
         {
-            var minInterval = LocalAssetService.GetMinimumDataInterval(asset);
-            
-            // If data is daily, disable hourly intervals (1d)
-            if (minInterval == "day" && range == "1d")
-            {
-                return true;
-            }
-            // If data is daily, also disable 7d if there are fewer than 7 data points
-            if (minInterval == "day" && range == "7d" && asset.HistoryData != null && asset.HistoryData.Count < 7)
-            {
-                return true;
-            }
+            return true;
         }
 
         return false;
