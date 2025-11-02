@@ -157,7 +157,7 @@ namespace PlotThoseLines.Services
                         }
                     });
                 }
-                catch (Exception ex)
+                catch
                 {
                     return (asset.Id!, (CoinHistoryDataResponse?)null);
                 }
@@ -267,7 +267,7 @@ namespace PlotThoseLines.Services
                     vs_currency = "usd"
                 };
             }
-            catch (Exception ex)
+            catch
             {
                 return emptyResponse;
             }
@@ -383,7 +383,7 @@ namespace PlotThoseLines.Services
                 
                 return result;
             }
-            catch (Exception ex)
+            catch
             {
                 return new List<EnhancedMarketChart>
                 {

@@ -234,11 +234,6 @@ h1:focus {
   border: 1px solid var(--border-default);
 }
 
-.asset-card:hover {
-  box-shadow: var(--shadow-xl);
-  transform: translateY(-2px);
-}
-
 .empty-state {
   padding: var(--spacing-2xl) var(--spacing-md);
   text-align: center;
@@ -276,10 +271,6 @@ h1:focus {
 
 .card {
   transition: all var(--transition-base);
-}
-
-.card:hover {
-  box-shadow: var(--shadow-md);
 }
 
 .btn {

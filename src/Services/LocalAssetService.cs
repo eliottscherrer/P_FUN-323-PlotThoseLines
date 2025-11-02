@@ -160,7 +160,7 @@ namespace PlotThoseLines.Services
                 await SaveAssetsAsync();
                 return true;
             }
-            catch (Exception ex)
+            catch
             {
                 return false;
             }
@@ -214,11 +214,7 @@ namespace PlotThoseLines.Services
                     _assets = new List<LocalAsset>();
                 }
             }
-            catch (JsonException jsonEx)
-            {
-                _assets = new List<LocalAsset>();
-            }
-            catch (Exception ex)
+            catch
             {
                 _assets = new List<LocalAsset>();
             }
@@ -237,7 +233,7 @@ namespace PlotThoseLines.Services
                 var json = JsonSerializer.Serialize(_assets, options);
                 await File.WriteAllTextAsync(_assetsFilePath, json);
             }
-            catch (Exception ex)
+            catch
             {
                 throw; // Re-throw to notify caller of save failure
             }

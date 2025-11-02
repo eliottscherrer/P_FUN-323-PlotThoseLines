@@ -191,7 +191,7 @@ else if (allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_c
         }
         @foreach (var assetData in validAssets)
         {
-            var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
+            var asset = selectedAssets?.FirstOrDefault(a => a.Id == assetData.Key);
             var chartData = GetEnhancedChartData(assetData.Value);
             var stats = CalculateStats(chartData);
             var assetColor = chartColors[colorIndex % chartColors.Length];
@@ -250,7 +250,7 @@ else if (allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_c
         @if (useCandlestick)
         {
             var assetData = validAssets.First();
-            var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
+            var asset = selectedAssets?.FirstOrDefault(a => a.Id == assetData.Key);
             var seriesName = asset?.Symbol?.ToUpper() ?? assetData.Key;
             
             <ApexCandleSeries TItem="EnhancedMarketChart"
@@ -266,7 +266,7 @@ else if (allAssetData.Any(d => d.Value?.market_chart != null && d.Value.market_c
         {
             @foreach (var assetData in validAssets)
             {
-                var asset = selectedAssets.FirstOrDefault(a => a.Id == assetData.Key);
+                var asset = selectedAssets?.FirstOrDefault(a => a.Id == assetData.Key);
                 var seriesName = asset?.Symbol?.ToUpper() ?? assetData.Key;
                 
                 <ApexPointSeries TItem="EnhancedMarketChart"
@@ -684,13 +684,7 @@ else if (allAssetData.Any() && allAssetData.Any(d => d.Value != null))
                 // Try to update chart anyway
                 if (chartRef is not null)
                 {
-                    try
-                    {
-                        await chartRef.UpdateOptionsAsync(true, true, false, null);
-                    }
-                    catch (Exception chartEx)
-                    {
-                    }
+                    await chartRef.UpdateOptionsAsync(true, true, false, null);
                 }
             }
             else
