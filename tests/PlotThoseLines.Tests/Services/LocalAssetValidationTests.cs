@@ -33,7 +33,6 @@ namespace PlotThoseLines.Tests.Services
             const string ASSET_ID = "bitcoin";
             const string EXPECTED_DATE = "2024-01-01";
             const double EXPECTED_PRICE = 42000.0;
-            const int EXPECTED_DATA_COUNT = 1;
             
             // Act
             var asset = new LocalAsset
@@ -47,7 +46,7 @@ namespace PlotThoseLines.Tests.Services
 
             // Assert
             Assert.NotNull(asset.HistoryData);
-            Assert.Equal(EXPECTED_DATA_COUNT, asset.HistoryData.Count);
+            Assert.Single(asset.HistoryData); // Check if there's exactly one entry
             Assert.Equal(EXPECTED_DATE, asset.HistoryData[0].Date);
             Assert.Equal(EXPECTED_PRICE, asset.HistoryData[0].Price);
         }
