@@ -2,6 +2,16 @@
 
 Application .NET MAUI + Blazor Hybride pour visualiser des séries temporelles (crypto) avec ApexCharts.
 
+## 🖼️ Aperçu  
+### Affichage d'une série temporelle seule sur 1 mois 
+<img width="1419" height="998" alt="image" src="https://github.com/user-attachments/assets/6dd275ab-246c-4b99-9ad8-a388b159520f" />  
+
+### Affichage de plusieurs séries temporelles sur 1 an
+<img width="1419" height="993" alt="image" src="https://github.com/user-attachments/assets/bed95c1d-5083-44d2-a5b5-f549b6992dce" />
+
+### Ajout d'un asset local
+<img width="1423" height="649" alt="image" src="https://github.com/user-attachments/assets/01982352-bdd6-4924-a06e-95880a62ed9c" />
+
 ## 🚀 Démarrer
 1. Ouvrir la solution [src/PlotThoseLines.sln](src/PlotThoseLines.sln) dans Visual Studio (MAUI et Blazor installés).
 2. Définir une clé API dans l'onglet Settings.
